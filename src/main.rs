@@ -184,7 +184,15 @@ fn run_loop(
                                     let defaults = get_default_keybindings();
                                     let mut missing = Vec::new();
                                     for (default_key, default_action) in defaults {
-                                        if !app.keybindings.iter().any(|(k, _)| k == &default_key) {
+                                        if let Some((_, user_action)) =
+                                            app.keybindings.iter().find(|(k, _)| k == &default_key)
+                                        {
+                                            // Si la tecla existe pero la acción o propiedades difieren
+                                            if default_action.trim() != user_action.trim() {
+                                                missing.push((default_key, default_action));
+                                            }
+                                        } else {
+                                            // Si la tecla no existe en absoluto
                                             missing.push((default_key, default_action));
                                         }
                                     }
