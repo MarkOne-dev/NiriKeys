@@ -1,7 +1,7 @@
 <p align="center">
   <a href="https://github.com/MarkOne-dev/NiriKeys">
     <picture>
-      <img src="https://raw.githubusercontent.com/MarkOne-dev/NiriKeys/main/assets/logo.png" alt="NiriKeys logo" width="350">
+      <img src="src/assets/interface-image.png" alt="NiriKeys logo" width="750">
     </picture>
   </a>
 </p>
@@ -11,6 +11,10 @@
   <a href="https://github.com/MarkOne-dev/NiriKeys/actions"><img alt="Build Status" src="https://img.shields.io/github/actions/workflow/status/MarkOne-dev/NiriKeys/publish.yml?style=flat-square&branch=main" /></a>
   <a href="https://opensource.org/licenses/MIT"><img alt="License" src="https://img.shields.io/github/license/MarkOne-dev/NiriKeys?style=flat-square" /></a>
 </p>
+
+> [!IMPORTANT]
+> This application is specifically designed and optimized to work **only** with the **Noctalia Shell** environment.
+
 ---
 
 ### Installation
