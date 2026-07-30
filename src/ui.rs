@@ -1,18 +1,22 @@
+use crate::app::{ActiveScreen, App, InputFocus};
+use crate::translations::{Language, Translations};
 use ratatui::{
+    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Span},
     widgets::{Block, Clear, List, ListItem, Paragraph, Wrap},
-    Frame,
 };
-use crate::app::{App, ActiveScreen, InputFocus};
-use crate::translations::{Language, Translations};
 
 pub fn ui_draw(frame: &mut Frame, app: &mut App) {
     let size = frame.area();
 
     // Si está cargando, renderizar la pantalla de carga y retornar de inmediato
-    if let ActiveScreen::Loading { progress, status_msg } = &app.active_screen {
+    if let ActiveScreen::Loading {
+        progress,
+        status_msg,
+    } = &app.active_screen
+    {
         frame.render_widget(Clear, size); // Limpiar pantalla completa
 
         let loading_layout = Layout::default()
@@ -52,7 +56,8 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
             Line::from(""),
             Line::from(bar).cyan().bold(),
         ];
-        let progress_widget = Paragraph::new(progress_lines).alignment(ratatui::layout::Alignment::Center);
+        let progress_widget =
+            Paragraph::new(progress_lines).alignment(ratatui::layout::Alignment::Center);
         frame.render_widget(progress_widget, loading_layout[3]);
         return;
     }
@@ -68,17 +73,28 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
         .split(size);
 
     // Renderizar Header
-    let header_widget = Paragraph::new(vec![
-        Line::from(vec![
-            Span::styled(Translations::get(&app.lang).title, Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)),
-            Span::styled(Translations::get(&app.lang).subtitle, Style::default().fg(Color::Cyan)),
-            if app.dry_run {
-                Span::styled(Translations::get(&app.lang).dry_run, Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
-            } else {
-                Span::raw("")
-            }
-        ])
-    ])
+    let header_widget = Paragraph::new(vec![Line::from(vec![
+        Span::styled(
+            Translations::get(&app.lang).title,
+            Style::default()
+                .fg(Color::Magenta)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            Translations::get(&app.lang).subtitle,
+            Style::default().fg(Color::Cyan),
+        ),
+        if app.dry_run {
+            Span::styled(
+                Translations::get(&app.lang).dry_run,
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            )
+        } else {
+            Span::raw("")
+        },
+    ])])
     .block(Block::bordered().border_style(Style::default().fg(Color::Magenta)));
     frame.render_widget(header_widget, chunks[0]);
 
@@ -94,14 +110,22 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
         ActiveScreen::CreateConfigPrompt => Translations::get(&app.lang).help_create_config,
         ActiveScreen::AddPopup => Translations::get(&app.lang).help_add,
         ActiveScreen::ConfirmOverwrite { .. } => Translations::get(&app.lang).help_confirm,
-        ActiveScreen::ErrorPopup(_) | ActiveScreen::InfoPopup(_) => Translations::get(&app.lang).help_any_key,
+        ActiveScreen::ErrorPopup(_) | ActiveScreen::InfoPopup(_) => {
+            Translations::get(&app.lang).help_any_key
+        }
         ActiveScreen::InstallPrompt { .. } => Translations::get(&app.lang).help_install,
         ActiveScreen::MergePopup { .. } => Translations::get(&app.lang).help_merge,
-        ActiveScreen::EditAppearancePopup { .. } => Translations::get(&app.lang).modal_appearance_guide,
+        ActiveScreen::EditAppearancePopup { .. } => {
+            Translations::get(&app.lang).modal_appearance_guide
+        }
         ActiveScreen::Loading { .. } => "",
     };
-    let footer_widget = Paragraph::new(help_text)
-        .style(Style::default().bg(Color::Magenta).fg(Color::White).add_modifier(Modifier::BOLD));
+    let footer_widget = Paragraph::new(help_text).style(
+        Style::default()
+            .bg(Color::Magenta)
+            .fg(Color::White)
+            .add_modifier(Modifier::BOLD),
+    );
     frame.render_widget(footer_widget, chunks[2]);
 
     // 1.5. Dividir Dashboard en Tabs y Contenido
@@ -118,13 +142,23 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
         Translations::get(&app.lang).tab_shortcuts,
         Translations::get(&app.lang).tab_appearance,
     ];
-    let tab_spans = tab_titles.iter().enumerate().map(|(idx, title)| {
-        if idx == app.active_tab {
-            Span::styled(format!(" {} ", title), Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD))
-        } else {
-            Span::styled(format!(" {} ", title), Style::default().fg(Color::Gray))
-        }
-    }).collect::<Vec<_>>();
+    let tab_spans = tab_titles
+        .iter()
+        .enumerate()
+        .map(|(idx, title)| {
+            if idx == app.active_tab {
+                Span::styled(
+                    format!(" {} ", title),
+                    Style::default()
+                        .fg(Color::Black)
+                        .bg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                )
+            } else {
+                Span::styled(format!(" {} ", title), Style::default().fg(Color::Gray))
+            }
+        })
+        .collect::<Vec<_>>();
 
     let mut tab_line = Vec::new();
     for (i, span) in tab_spans.into_iter().enumerate() {
@@ -134,8 +168,11 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
         tab_line.push(span);
     }
 
-    let tabs_widget = Paragraph::new(Line::from(tab_line))
-        .block(Block::bordered().title(" Menú ").border_style(Style::default().fg(Color::DarkGray)));
+    let tabs_widget = Paragraph::new(Line::from(tab_line)).block(
+        Block::bordered()
+            .title(" Menú ")
+            .border_style(Style::default().fg(Color::DarkGray)),
+    );
     frame.render_widget(tabs_widget, dashboard_chunks[0]);
 
     // 2. Renderizar Dashboard Principal (Dos Columnas)
@@ -158,34 +195,61 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
 
     // Renderizar Metadatos Card
     let status_style = if app.file_is_valid {
-        Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
+        Style::default()
+            .fg(Color::Green)
+            .add_modifier(Modifier::BOLD)
     } else {
         Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
     };
 
-    let status_text = if app.file_is_valid { Translations::get(&app.lang).valid } else { Translations::get(&app.lang).invalid };
+    let status_text = if app.file_is_valid {
+        Translations::get(&app.lang).valid
+    } else {
+        Translations::get(&app.lang).invalid
+    };
 
     let metadata_text = vec![
         Line::from(vec![
-            Span::styled(Translations::get(&app.lang).path, Style::default().fg(Color::DarkGray)),
-            Span::styled(app.config_path.to_string_lossy(), Style::default().fg(Color::Cyan)),
+            Span::styled(
+                Translations::get(&app.lang).path,
+                Style::default().fg(Color::DarkGray),
+            ),
+            Span::styled(
+                app.config_path.to_string_lossy(),
+                Style::default().fg(Color::Cyan),
+            ),
         ]),
         Line::from(vec![
-            Span::styled(Translations::get(&app.lang).size, Style::default().fg(Color::DarkGray)),
-            Span::styled(format!("{:.2} KB", app.file_size_kb), Style::default().fg(Color::Yellow)),
+            Span::styled(
+                Translations::get(&app.lang).size,
+                Style::default().fg(Color::DarkGray),
+            ),
+            Span::styled(
+                format!("{:.2} KB", app.file_size_kb),
+                Style::default().fg(Color::Yellow),
+            ),
         ]),
         Line::from(vec![
-            Span::styled(Translations::get(&app.lang).modif, Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                Translations::get(&app.lang).modif,
+                Style::default().fg(Color::DarkGray),
+            ),
             Span::styled(&app.file_mod_time, Style::default().fg(Color::Blue)),
         ]),
         Line::from(vec![
-            Span::styled(Translations::get(&app.lang).syntax, Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                Translations::get(&app.lang).syntax,
+                Style::default().fg(Color::DarkGray),
+            ),
             Span::styled(status_text, status_style),
         ]),
     ];
 
-    let metadata_card = Paragraph::new(metadata_text)
-        .block(Block::bordered().title(Translations::get(&app.lang).entorno_title).border_style(Style::default().fg(Color::Cyan)));
+    let metadata_card = Paragraph::new(metadata_text).block(
+        Block::bordered()
+            .title(Translations::get(&app.lang).entorno_title)
+            .border_style(Style::default().fg(Color::Cyan)),
+    );
     frame.render_widget(metadata_card, left_chunks[0]);
 
     // Renderizar Panel Informativo Inferior
@@ -195,31 +259,48 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
         Line::from(Translations::get(&app.lang).info_line3),
         Line::from(Translations::get(&app.lang).info_line4),
     ];
-    let info_card = Paragraph::new(info_text)
-        .block(Block::bordered().title(Translations::get(&app.lang).info_title).border_style(Style::default().fg(Color::DarkGray)));
+    let info_card = Paragraph::new(info_text).block(
+        Block::bordered()
+            .title(Translations::get(&app.lang).info_title)
+            .border_style(Style::default().fg(Color::DarkGray)),
+    );
     frame.render_widget(info_card, left_chunks[1]);
 
     // Columna Derecha: Renderizar Lista de Atajos o Editor de Apariencia
     if app.active_tab == 0 {
-        let list_items: Vec<ListItem> = app.keybindings
+        let list_items: Vec<ListItem> = app
+            .keybindings
             .iter()
             .map(|(key, action)| {
-                ListItem::new(vec![
-                    Line::from(vec![
-                        Span::styled(format!("  {:width$} ", key, width = 20), Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
-                        Span::styled(" ➔  ", Style::default().fg(Color::DarkGray)),
-                        Span::styled(action.clone(), Style::default().fg(Color::White)),
-                    ])
-                ])
+                ListItem::new(vec![Line::from(vec![
+                    Span::styled(
+                        format!("  {:width$} ", key, width = 20),
+                        Style::default()
+                            .fg(Color::Green)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled("   ", Style::default().fg(Color::DarkGray)),
+                    Span::styled(action.clone(), Style::default().fg(Color::White)),
+                ])])
             })
             .collect();
 
         let list_widget = List::new(list_items)
-            .block(Block::bordered()
-                .title(format!(" {} ({}) ", Translations::get(&app.lang).list_title, app.keybindings.len()))
-                .border_style(Style::default().fg(Color::Cyan)))
-            .highlight_style(Style::default().bg(Color::Rgb(40, 44, 52)).add_modifier(Modifier::BOLD))
-            .highlight_symbol(" ❯ ");
+            .block(
+                Block::bordered()
+                    .title(format!(
+                        " {} ({}) ",
+                        Translations::get(&app.lang).list_title,
+                        app.keybindings.len()
+                    ))
+                    .border_style(Style::default().fg(Color::Cyan)),
+            )
+            .highlight_style(
+                Style::default()
+                    .bg(Color::Rgb(40, 44, 52))
+                    .add_modifier(Modifier::BOLD),
+            )
+            .highlight_symbol("  ");
 
         frame.render_stateful_widget(list_widget, main_layout[1], &mut app.list_state);
     } else {
@@ -227,22 +308,31 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
         let list_items: Vec<ListItem> = settings
             .iter()
             .map(|setting| {
-                ListItem::new(vec![
-                    Line::from(vec![
-                        Span::styled(format!("  {:width$} ", setting.name, width = 35), Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
-                        Span::styled(" ➔  ", Style::default().fg(Color::DarkGray)),
-                        Span::styled(setting.value.clone(), Style::default().fg(Color::White)),
-                    ])
-                ])
+                ListItem::new(vec![Line::from(vec![
+                    Span::styled(
+                        format!("  {:width$} ", setting.name, width = 35),
+                        Style::default()
+                            .fg(Color::Yellow)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled("   ", Style::default().fg(Color::DarkGray)),
+                    Span::styled(setting.value.clone(), Style::default().fg(Color::White)),
+                ])])
             })
             .collect();
 
         let list_widget = List::new(list_items)
-            .block(Block::bordered()
-                .title(" Configuración Estética ")
-                .border_style(Style::default().fg(Color::Yellow)))
-            .highlight_style(Style::default().bg(Color::Rgb(40, 44, 52)).add_modifier(Modifier::BOLD))
-            .highlight_symbol(" ❯ ");
+            .block(
+                Block::bordered()
+                    .title(" Configuración Estética ")
+                    .border_style(Style::default().fg(Color::Yellow)),
+            )
+            .highlight_style(
+                Style::default()
+                    .bg(Color::Rgb(40, 44, 52))
+                    .add_modifier(Modifier::BOLD),
+            )
+            .highlight_symbol("  ");
 
         frame.render_stateful_widget(list_widget, main_layout[1], &mut app.appearance_state);
     }
@@ -257,28 +347,50 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
                 Line::from(""),
                 Line::from(Translations::get(&app.lang).modal_install_msg1),
                 Line::from(""),
-                Line::from(Translations::get(&app.lang).modal_install_msg2.replace("{}", pm_name)),
+                Line::from(
+                    Translations::get(&app.lang)
+                        .modal_install_msg2
+                        .replace("{}", pm_name),
+                ),
                 Line::from(""),
-                Line::from(Translations::get(&app.lang).modal_install_msg3.replace("{}", cmd)),
+                Line::from(
+                    Translations::get(&app.lang)
+                        .modal_install_msg3
+                        .replace("{}", cmd),
+                ),
                 Line::from(""),
                 Line::from(vec![
-                    Span::styled("   [i] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
-                    Span::styled(match app.lang {
-                        Language::Es => "Instalar   ",
-                        Language::En => "Install   ",
-                    }, Style::default().fg(Color::Green)),
-                    Span::styled("   [Esc/q] ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
-                    Span::styled(match app.lang {
-                        Language::Es => "Salir",
-                        Language::En => "Exit",
-                    }, Style::default().fg(Color::Red)),
+                    Span::styled(
+                        "   [i] ",
+                        Style::default()
+                            .fg(Color::Green)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(
+                        match app.lang {
+                            Language::Es => "Instalar   ",
+                            Language::En => "Install   ",
+                        },
+                        Style::default().fg(Color::Green),
+                    ),
+                    Span::styled(
+                        "   [Esc/q] ",
+                        Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(
+                        match app.lang {
+                            Language::Es => "Salir",
+                            Language::En => "Exit",
+                        },
+                        Style::default().fg(Color::Red),
+                    ),
                 ]),
             ];
 
             let popup_block = Block::bordered()
                 .title(Translations::get(&app.lang).modal_install_title)
                 .border_style(Style::default().fg(Color::Yellow));
-            
+
             let prompt_paragraph = Paragraph::new(prompt_text)
                 .block(popup_block)
                 .alignment(ratatui::layout::Alignment::Center);
@@ -295,8 +407,16 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
                 Line::from(Translations::get(&app.lang).modal_create_msg2),
                 Line::from(""),
                 Line::from(vec![
-                    Span::styled(Translations::get(&app.lang).modal_create_yes, Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
-                    Span::styled(Translations::get(&app.lang).modal_create_no, Style::default().fg(Color::Red)),
+                    Span::styled(
+                        Translations::get(&app.lang).modal_create_yes,
+                        Style::default()
+                            .fg(Color::Green)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(
+                        Translations::get(&app.lang).modal_create_no,
+                        Style::default().fg(Color::Red),
+                    ),
                 ]),
             ];
 
@@ -330,9 +450,13 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
             let key_block = Block::bordered()
                 .title(Translations::get(&app.lang).modal_add_key_title)
                 .border_style(key_style);
-            
+
             // Cursor simulado
-            let key_cursor = if app.input_focus == InputFocus::Key { "_" } else { "" };
+            let key_cursor = if app.input_focus == InputFocus::Key {
+                "_"
+            } else {
+                ""
+            };
             let key_text = format!("{}{}", app.input_key, key_cursor);
             let key_widget = Paragraph::new(key_text).block(key_block);
             frame.render_widget(key_widget, popup_layout[0]);
@@ -346,8 +470,12 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
             let action_block = Block::bordered()
                 .title(Translations::get(&app.lang).modal_add_action_title)
                 .border_style(action_style);
-            
-            let action_cursor = if app.input_focus == InputFocus::Action { "_" } else { "" };
+
+            let action_cursor = if app.input_focus == InputFocus::Action {
+                "_"
+            } else {
+                ""
+            };
             let action_text = format!("{}{}", app.input_action, action_cursor);
             let action_widget = Paragraph::new(action_text).block(action_block);
             frame.render_widget(action_widget, popup_layout[1]);
@@ -357,7 +485,7 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
                 .alignment(ratatui::layout::Alignment::Center)
                 .style(Style::default().fg(Color::DarkGray));
             frame.render_widget(modal_guide, popup_layout[2]);
-            
+
             // Dibujar el borde del popup general alrededor de los inputs
             let outer_block = Block::bordered()
                 .title(Translations::get(&app.lang).modal_add_outer_title)
@@ -370,13 +498,25 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
 
             let prompt_text = vec![
                 Line::from(""),
-                Line::from(Translations::get(&app.lang).modal_confirm_msg1.replace("{}", &k)),
+                Line::from(
+                    Translations::get(&app.lang)
+                        .modal_confirm_msg1
+                        .replace("{}", &k),
+                ),
                 Line::from(""),
                 Line::from(Translations::get(&app.lang).modal_confirm_msg2),
                 Line::from(""),
                 Line::from(vec![
-                    Span::styled(Translations::get(&app.lang).modal_confirm_yes, Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
-                    Span::styled(Translations::get(&app.lang).modal_confirm_no, Style::default().fg(Color::Red)),
+                    Span::styled(
+                        Translations::get(&app.lang).modal_confirm_yes,
+                        Style::default()
+                            .fg(Color::Green)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(
+                        Translations::get(&app.lang).modal_confirm_no,
+                        Style::default().fg(Color::Red),
+                    ),
                 ]),
             ];
 
@@ -395,24 +535,30 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
             let error_block = Block::bordered()
                 .title(Translations::get(&app.lang).modal_error_title)
                 .border_style(Style::default().fg(Color::Red));
-            
+
             let wrapped_text = vec![
                 Line::from(""),
                 Line::from(Translations::get(&app.lang).modal_error_msg.red()),
                 Line::from(""),
             ];
-            
+
             let mut final_text = wrapped_text;
             for line in err_text.lines() {
                 final_text.push(Line::from(line.yellow().to_string()));
             }
             final_text.push(Line::from(""));
-            final_text.push(Line::from(Translations::get(&app.lang).modal_error_close.dim().white().to_string()));
+            final_text.push(Line::from(
+                Translations::get(&app.lang)
+                    .modal_error_close
+                    .dim()
+                    .white()
+                    .to_string(),
+            ));
 
             let error_paragraph = Paragraph::new(final_text)
                 .block(error_block)
                 .wrap(Wrap { trim: true });
-            
+
             frame.render_widget(error_paragraph, popup_area);
         }
         ActiveScreen::InfoPopup(info_text) => {
@@ -422,27 +568,36 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
             let popup_block = Block::bordered()
                 .title(Translations::get(&app.lang).modal_info_title)
                 .border_style(Style::default().fg(Color::Green));
-            
+
             let mut lines = vec![Line::from("")];
             for line in info_text.lines() {
                 lines.push(Line::from(line.white().to_string()));
             }
             lines.push(Line::from(""));
-            lines.push(Line::from(Translations::get(&app.lang).modal_info_close.dim().white().to_string()));
+            lines.push(Line::from(
+                Translations::get(&app.lang)
+                    .modal_info_close
+                    .dim()
+                    .white()
+                    .to_string(),
+            ));
 
             let info_paragraph = Paragraph::new(lines)
                 .block(popup_block)
                 .alignment(ratatui::layout::Alignment::Center);
             frame.render_widget(info_paragraph, popup_area);
         }
-        ActiveScreen::MergePopup { missing, selected_idx } => {
+        ActiveScreen::MergePopup {
+            missing,
+            selected_idx,
+        } => {
             let popup_area = get_centered_rect(70, 60, size);
             frame.render_widget(Clear, popup_area);
 
             let popup_block = Block::bordered()
                 .title(match app.lang {
-                    Language::Es => " 🧩 Importar Atajos Recomendados ",
-                    Language::En => " 🧩 Import Recommended Shortcuts ",
+                    Language::Es => " 󰅩 Importar Atajos Recomendados ",
+                    Language::En => " 󰅩 Import Recommended Shortcuts ",
                 })
                 .border_style(Style::default().fg(Color::Yellow));
 
@@ -458,10 +613,28 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
             // Renderizar la lista de atajos con scroll/highlight
             for (idx, (key, action)) in missing.iter().enumerate() {
                 let is_selected = idx == *selected_idx;
-                let prefix = if is_selected { " ❯ " } else { "   " };
-                
-                let key_span = Span::styled(format!("{:<20}", key), if is_selected { Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD) } else { Style::default().fg(Color::Cyan) });
-                let action_span = Span::styled(action, if is_selected { Style::default().fg(Color::White).add_modifier(Modifier::BOLD) } else { Style::default().fg(Color::DarkGray) });
+                let prefix = if is_selected { "  " } else { "   " };
+
+                let key_span = Span::styled(
+                    format!("{:<20}", key),
+                    if is_selected {
+                        Style::default()
+                            .fg(Color::Yellow)
+                            .add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(Color::Cyan)
+                    },
+                );
+                let action_span = Span::styled(
+                    action,
+                    if is_selected {
+                        Style::default()
+                            .fg(Color::White)
+                            .add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(Color::DarkGray)
+                    },
+                );
 
                 let style = if is_selected {
                     Style::default().bg(Color::Rgb(40, 44, 52))
@@ -469,12 +642,24 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
                     Style::default()
                 };
 
-                lines.push(Line::from(vec![
-                    Span::styled(prefix, if is_selected { Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD) } else { Style::default() }),
-                    key_span,
-                    Span::raw(" ➔  "),
-                    action_span,
-                ]).style(style));
+                lines.push(
+                    Line::from(vec![
+                        Span::styled(
+                            prefix,
+                            if is_selected {
+                                Style::default()
+                                    .fg(Color::Yellow)
+                                    .add_modifier(Modifier::BOLD)
+                            } else {
+                                Style::default()
+                            },
+                        ),
+                        key_span,
+                        Span::raw("   "),
+                        action_span,
+                    ])
+                    .style(style),
+                );
             }
 
             lines.push(Line::from(""));
@@ -488,7 +673,11 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
                 .wrap(Wrap { trim: false });
             frame.render_widget(paragraph, popup_area);
         }
-        ActiveScreen::EditAppearancePopup { setting_id: _, setting_name, input_value } => {
+        ActiveScreen::EditAppearancePopup {
+            setting_id: _,
+            setting_name,
+            input_value,
+        } => {
             let popup_area = get_centered_rect(60, 25, size);
             frame.render_widget(Clear, popup_area);
 
@@ -498,11 +687,20 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
 
             let prompt_text = vec![
                 Line::from(""),
-                Line::from(Translations::get(&app.lang).modal_appearance_msg.replace("{}", setting_name)),
+                Line::from(
+                    Translations::get(&app.lang)
+                        .modal_appearance_msg
+                        .replace("{}", setting_name),
+                ),
                 Line::from(""),
                 Line::from(vec![
                     Span::styled("   ", Style::default()),
-                    Span::styled(format!("{}_", input_value), Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                    Span::styled(
+                        format!("{}_", input_value),
+                        Style::default()
+                            .fg(Color::Cyan)
+                            .add_modifier(Modifier::BOLD),
+                    ),
                 ]),
                 Line::from(""),
                 Line::from(Translations::get(&app.lang).modal_appearance_guide).dim(),
