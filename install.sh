@@ -83,6 +83,16 @@ if ! command -v cargo &> /dev/null; then
     exit 1
 fi
 
+# Eliminar ejecutable previo si existe para asegurar una actualización limpia
+if [ -f "$HOME/.cargo/bin/nirikeys" ]; then
+    echo -e "${BLUE}[*] Eliminando versión anterior en ~/.cargo/bin/nirikeys...${NC}"
+    rm "$HOME/.cargo/bin/nirikeys"
+fi
+if [ -f "$HOME/.local/bin/nirikeys" ]; then
+    echo -e "${BLUE}[*] Eliminando versión anterior en ~/.local/bin/nirikeys...${NC}"
+    rm "$HOME/.local/bin/nirikeys"
+fi
+
 echo -e "\n${BLUE}[*] Compilando e instalando NiriKeys...${NC}"
 
 # Detectar si estamos ejecutando el script desde el repositorio clonado localmente
