@@ -9,19 +9,62 @@ NC='\033[0;m' # No Color
 
 echo -e "${BLUE}=== Instalador Automatizado de NiriKeys ===${NC}\n"
 
-# 1. Verificar si Rust/Cargo está instalado
+# 1. Verificar si Rust/Cargo está instalado en el sistema
 if ! command -v cargo &> /dev/null; then
-    echo -e "${YELLOW}[!] Rust no se encuentra instalado en tu sistema.${NC}"
-    echo -e "${BLUE}[*] Iniciando instalación automática de Rust a través de rustup...${NC}"
+    echo -e "${YELLOW}[!] Rust (motor de compilación) no se encuentra instalado en tu sistema.${NC}"
     
-    # Descargar e instalar Rust usando el script oficial de rustup de forma no interactiva (-y)
-    if curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y; then
-        echo -e "${GREEN}[✓] Rust se ha instalado correctamente.${NC}"
-        # Cargar variables de entorno en el script actual
-        source "$HOME/.cargo/env"
+    # Detectar el gestor de paquetes de la distro para instalar Rust/Cargo
+    INSTALL_RUST_CMD=""
+    PM_NAME=""
+    
+    if command -v pacman &> /dev/null; then
+        PM_NAME="Arch Linux (pacman)"
+        INSTALL_RUST_CMD="sudo pacman -S --needed rust cargo"
+    elif command -v dnf &> /dev/null; then
+        PM_NAME="Fedora (dnf)"
+        INSTALL_RUST_CMD="sudo dnf install -y rust cargo"
+    elif command -v zypper &> /dev/null; then
+        PM_NAME="openSUSE (zypper)"
+        INSTALL_RUST_CMD="sudo zypper install -y rust cargo"
+    elif command -v apt-get &> /dev/null; then
+        PM_NAME="Debian/Ubuntu (apt-get)"
+        INSTALL_RUST_CMD="sudo apt-get update && sudo apt-get install -y rustc cargo"
+    fi
+    
+    if [ -n "$INSTALL_RUST_CMD" ]; then
+        echo -e "${BLUE}[*] Gestor de paquetes detectado: $PM_NAME${NC}"
+        read -p "¿Deseas instalar Rust y Cargo usando '$INSTALL_RUST_CMD'? [S/n]: " opt
+        opt=$(echo "$opt" | tr '[:upper:]' '[:lower:]')
+        if [[ -z "$opt" || "$opt" == "s" || "$opt" == "si" || "$opt" == "y" || "$opt" == "yes" ]]; then
+            echo -e "${BLUE}[*] Ejecutando instalación de Rust...${NC}"
+            if eval "$INSTALL_RUST_CMD"; then
+                echo -e "${GREEN}[✓] Rust y Cargo se han instalado correctamente desde los repositorios de tu sistema.${NC}"
+            else
+                echo -e "${RED}[✗] Falló la instalación mediante el gestor de paquetes.${NC}"
+                # Fallback al script oficial de rustup
+                echo -e "${BLUE}[*] Intentando instalación alternativa mediante el script oficial de rustup...${NC}"
+                if curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y; then
+                    echo -e "${GREEN}[✓] Rust se ha instalado correctamente mediante rustup.${NC}"
+                    source "$HOME/.cargo/env"
+                else
+                    echo -e "${RED}[✗] Error al instalar Rust de forma alternativa. Por favor, instálalo manualmente desde: https://rustup.rs/${NC}"
+                    exit 1
+                fi
+            fi
+        else
+            echo -e "${RED}[✗] Instalación de Rust omitida. NiriKeys requiere Rust para compilarse.${NC}"
+            exit 1
+        fi
     else
-        echo -e "${RED}[✗] Error al instalar Rust. Por favor, instálalo de forma manual desde: https://rustup.rs/${NC}"
-        exit 1
+        # Fallback directo si no se detecta gestor de paquetes soportado
+        echo -e "${BLUE}[*] Iniciando instalación automática de Rust a través de rustup (oficial)...${NC}"
+        if curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y; then
+            echo -e "${GREEN}[✓] Rust se ha instalado correctamente.${NC}"
+            source "$HOME/.cargo/env"
+        else
+            echo -e "${RED}[✗] Error al instalar Rust. Por favor, instálalo de forma manual desde: https://rustup.rs/${NC}"
+            exit 1
+        fi
     fi
 else
     echo -e "${GREEN}[✓] Se detectó Rust y Cargo en el sistema.${NC}"
