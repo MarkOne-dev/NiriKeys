@@ -23,8 +23,17 @@
 
 Puedes instalar y usar **NiriKeys** directamente de las siguientes maneras:
 
-### 1. Usando Cargo (Desarrolladores Rust)
-Si tienes Rust y Cargo instalados en tu sistema, puedes compilar e instalar la última versión directo desde el repositorio ejecutando:
+### 1. Instalación de un solo comando (Recomendado)
+Puedes ejecutar el script de instalación automática que comprobará si tienes Rust instalado, lo instalará si hace falta, compilará e instalará **NiriKeys**:
+```bash
+curl -sSL https://raw.githubusercontent.com/MarkOne-dev/NiriKeys/main/install.sh | bash
+```
+*(Nota: Si es la primera vez que instalas Rust con este script, se te pedirá reiniciar tu terminal o cargar `source "$HOME/.cargo/env"`).*
+
+---
+
+### 2. Usando Cargo (Desarrolladores Rust)
+Si ya tienes Rust y Cargo instalados en tu sistema, puedes instalar la última versión directo desde el repositorio ejecutando:
 ```bash
 cargo install --git https://github.com/MarkOne-dev/NiriKeys.git
 ```
