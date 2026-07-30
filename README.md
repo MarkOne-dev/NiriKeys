@@ -2,9 +2,7 @@
 
 <p align="center">The advanced, safe, and interactive keyboard shortcut & aesthetics manager for the Niri window manager.</p>
 <p align="center">
-  <a href="https://github.com/MarkOne-dev/NiriKeys/releases"><img alt="Releases" src="https://img.shields.io/github/v/release/MarkOne-dev/NiriKeys?style=flat-square" /></a>
-  <a href="https://github.com/MarkOne-dev/NiriKeys/actions"><img alt="Build Status" src="https://img.shields.io/github/actions/workflow/status/MarkOne-dev/NiriKeys/publish.yml?style=flat-square&branch=main" /></a>
-  <a href="https://opensource.org/licenses/MIT"><img alt="License" src="https://img.shields.io/github/license/MarkOne-dev/NiriKeys?style=flat-square" /></a>
+  <a href="https://github.com/MarkOne-dev/NiriKeys/releases"><img alt="Releases" src="https://img.shields.io/github/v/release/MarkOne-dev/NiriKeys?include_prereleases&style=flat-square" /></a>
 </p>
 
 > [!IMPORTANT]
