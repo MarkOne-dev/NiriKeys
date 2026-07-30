@@ -2,14 +2,15 @@ use crate::translations::Language;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+/// Represents a Linux package manager configuration.
 pub struct PackageManager {
     pub name: &'static str,
     pub install_cmd: &'static str,
     pub args: Vec<&'static str>,
 }
 
+/// Detects the available native package manager on the host system.
 pub fn get_package_manager() -> Option<PackageManager> {
-    // 1. Verificar pacman (Arch Linux)
     if Command::new("which")
         .arg("pacman")
         .stdout(Stdio::null())
@@ -24,7 +25,6 @@ pub fn get_package_manager() -> Option<PackageManager> {
             args: vec!["-S", "--needed", "niri"],
         });
     }
-    // 2. Verificar dnf (Fedora)
     if Command::new("which")
         .arg("dnf")
         .stdout(Stdio::null())
@@ -39,7 +39,6 @@ pub fn get_package_manager() -> Option<PackageManager> {
             args: vec!["install", "-y", "niri"],
         });
     }
-    // 3. Verificar zypper (openSUSE)
     if Command::new("which")
         .arg("zypper")
         .stdout(Stdio::null())
@@ -54,7 +53,6 @@ pub fn get_package_manager() -> Option<PackageManager> {
             args: vec!["install", "-y", "niri"],
         });
     }
-    // 4. Verificar apt-get (Ubuntu/Debian)
     if Command::new("which")
         .arg("apt-get")
         .stdout(Stdio::null())
@@ -72,6 +70,7 @@ pub fn get_package_manager() -> Option<PackageManager> {
     None
 }
 
+/// Detects the language environment (Spanish or English fallback).
 pub fn detect_language() -> Language {
     let lang_env = std::env::var("LANG")
         .or_else(|_| std::env::var("LC_ALL"))
@@ -85,6 +84,7 @@ pub fn detect_language() -> Language {
     }
 }
 
+/// Resolves the absolute path to the Niri configuration file.
 pub fn get_config_path(cli_path: &Option<PathBuf>) -> PathBuf {
     if let Some(path) = cli_path {
         return path.clone();
@@ -93,12 +93,13 @@ pub fn get_config_path(cli_path: &Option<PathBuf>) -> PathBuf {
         path.push("niri/config.kdl");
         path
     } else {
-        let mut path = dirs::home_dir().expect("No se pudo detectar el directorio HOME");
+        let mut path = dirs::home_dir().expect("Could not detect HOME directory");
         path.push(".config/niri/config.kdl");
         path
     }
 }
 
+/// Validates the Niri KDL config file by calling 'niri validate'.
 pub fn validate_config(path: &Path) -> Result<(), String> {
     let output = Command::new("niri")
         .arg("validate")
@@ -115,14 +116,14 @@ pub fn validate_config(path: &Path) -> Result<(), String> {
                 let stdout = String::from_utf8_lossy(&out.stdout).to_string();
                 let combined = format!("{}{}", stdout, stderr);
                 Err(if combined.trim().is_empty() {
-                    "Error de validación desconocido.".to_string()
+                    "Unknown validation error.".to_string()
                 } else {
                     combined
                 })
             }
         }
         Err(e) => Err(format!(
-            "No se pudo ejecutar 'niri validate'. ¿Está Niri instalado? Detalle: {}",
+            "Could not execute 'niri validate'. Is Niri installed? Detail: {}",
             e
         )),
     }

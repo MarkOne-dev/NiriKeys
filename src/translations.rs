@@ -1,8 +1,10 @@
+/// Supported UI languages for translation.
 pub enum Language {
     Es,
     En,
 }
 
+/// Key-value pairs for localized TUI text strings.
 #[allow(dead_code)]
 pub struct Translations {
     pub title: &'static str,
@@ -66,7 +68,6 @@ pub struct Translations {
     pub msg_save_success: &'static str,
     pub msg_bye: &'static str,
 
-    // Appearance Editor Translations
     pub tab_shortcuts: &'static str,
     pub tab_appearance: &'static str,
     pub help_appearance: &'static str,

@@ -8,29 +8,28 @@ use ratatui::{
     widgets::{Block, Clear, List, ListItem, Paragraph, Wrap},
 };
 
+/// Draws the entire TUI application interface based on the active screen state.
 pub fn ui_draw(frame: &mut Frame, app: &mut App) {
     let size = frame.area();
 
-    // Si está cargando, renderizar la pantalla de carga y retornar de inmediato
     if let ActiveScreen::Loading {
         progress,
         status_msg,
     } = &app.active_screen
     {
-        frame.render_widget(Clear, size); // Limpiar pantalla completa
+        frame.render_widget(Clear, size);
 
         let loading_layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Percentage(25), // Spacer superior
-                Constraint::Length(5),      // ASCII Art (5 líneas)
-                Constraint::Length(2),      // Espacio intermedio
-                Constraint::Length(3),      // Barra de progreso y texto
-                Constraint::Min(0),         // Spacer inferior
+                Constraint::Percentage(25),
+                Constraint::Length(5),
+                Constraint::Length(2),
+                Constraint::Length(3),
+                Constraint::Min(0),
             ])
             .split(size);
 
-        // 1. Dibujar ASCII Art centrado
         let logo = vec![
             Line::from("███    ██  ██  ██████   ██  ██   ██  ██████  ██   ██  ███████").white(),
             Line::from("████   ██  ██  ██   ██  ██  ██  ██   ██       ██ ██   ██     ").white(),
@@ -41,7 +40,6 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
         let logo_widget = Paragraph::new(logo).alignment(ratatui::layout::Alignment::Center);
         frame.render_widget(logo_widget, loading_layout[1]);
 
-        // 2. Dibujar Barra de Progreso y Mensaje
         let filled_width = ((*progress as usize) * 30) / 100;
         let empty_width = 30 - filled_width;
         let bar = format!(
@@ -62,17 +60,15 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
         return;
     }
 
-    // 1. Layout Principal (Header, Dashboard, Footer)
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3), // Header
-            Constraint::Min(5),    // Dashboard
-            Constraint::Length(1), // Footer / Leyenda
+            Constraint::Length(3),
+            Constraint::Min(5),
+            Constraint::Length(1),
         ])
         .split(size);
 
-    // Renderizar Header
     let header_widget = Paragraph::new(vec![Line::from(vec![
         Span::styled(
             Translations::get(&app.lang).title,
@@ -98,7 +94,6 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
     .block(Block::bordered().border_style(Style::default().fg(Color::Magenta)));
     frame.render_widget(header_widget, chunks[0]);
 
-    // Renderizar Footer (Guía rápida de teclas)
     let help_text = match app.active_screen {
         ActiveScreen::Dashboard => {
             if app.active_tab == 0 {
@@ -128,16 +123,11 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
     );
     frame.render_widget(footer_widget, chunks[2]);
 
-    // 1.5. Dividir Dashboard en Tabs y Contenido
     let dashboard_chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(3), // Tab bar
-            Constraint::Min(2),    // Dashboard Columns
-        ])
+        .constraints([Constraint::Length(3), Constraint::Min(2)])
         .split(chunks[1]);
 
-    // Renderizar Tab bar
     let tab_titles = vec![
         Translations::get(&app.lang).tab_shortcuts,
         Translations::get(&app.lang).tab_appearance,
@@ -175,25 +165,16 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
     );
     frame.render_widget(tabs_widget, dashboard_chunks[0]);
 
-    // 2. Renderizar Dashboard Principal (Dos Columnas)
     let main_layout = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage(35), // Columna Izquierda: Metadatos y ayuda
-            Constraint::Percentage(65), // Columna Derecha: Lista o Apariencia
-        ])
+        .constraints([Constraint::Percentage(35), Constraint::Percentage(65)])
         .split(dashboard_chunks[1]);
 
-    // Columna Izquierda (Metadatos & Info de Niri)
     let left_chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(9), // Metadatos Card
-            Constraint::Min(4),    // Panel Informativo
-        ])
+        .constraints([Constraint::Length(9), Constraint::Min(4)])
         .split(main_layout[0]);
 
-    // Renderizar Metadatos Card
     let status_style = if app.file_is_valid {
         Style::default()
             .fg(Color::Green)
@@ -252,7 +233,6 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
     );
     frame.render_widget(metadata_card, left_chunks[0]);
 
-    // Renderizar Panel Informativo Inferior
     let info_text = vec![
         Line::from(Translations::get(&app.lang).info_line1),
         Line::from(Translations::get(&app.lang).info_line2),
@@ -266,7 +246,6 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
     );
     frame.render_widget(info_card, left_chunks[1]);
 
-    // Columna Derecha: Renderizar Lista de Atajos o Editor de Apariencia
     if app.active_tab == 0 {
         let list_items: Vec<ListItem> = app
             .keybindings
@@ -337,7 +316,6 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
         frame.render_stateful_widget(list_widget, main_layout[1], &mut app.appearance_state);
     }
 
-    // 3. Renderizar Popups Modales (si están activos)
     match &app.active_screen {
         ActiveScreen::InstallPrompt { pm_name, cmd } => {
             let popup_area = get_centered_rect(55, 30, size);
@@ -435,13 +413,12 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
             let popup_layout = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([
-                    Constraint::Length(3), // Input Key
-                    Constraint::Length(3), // Input Action
-                    Constraint::Min(1),    // Guía del modal
+                    Constraint::Length(3),
+                    Constraint::Length(3),
+                    Constraint::Min(1),
                 ])
                 .split(popup_area);
 
-            // Caja para Teclas
             let key_style = if app.input_focus == InputFocus::Key {
                 Style::default().fg(Color::Cyan)
             } else {
@@ -451,7 +428,6 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
                 .title(Translations::get(&app.lang).modal_add_key_title)
                 .border_style(key_style);
 
-            // Cursor simulado
             let key_cursor = if app.input_focus == InputFocus::Key {
                 "_"
             } else {
@@ -461,7 +437,6 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
             let key_widget = Paragraph::new(key_text).block(key_block);
             frame.render_widget(key_widget, popup_layout[0]);
 
-            // Caja para Acción
             let action_style = if app.input_focus == InputFocus::Action {
                 Style::default().fg(Color::Cyan)
             } else {
@@ -480,13 +455,11 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
             let action_widget = Paragraph::new(action_text).block(action_block);
             frame.render_widget(action_widget, popup_layout[1]);
 
-            // Guía del modal
             let modal_guide = Paragraph::new(Translations::get(&app.lang).modal_add_guide)
                 .alignment(ratatui::layout::Alignment::Center)
                 .style(Style::default().fg(Color::DarkGray));
             frame.render_widget(modal_guide, popup_layout[2]);
 
-            // Dibujar el borde del popup general alrededor de los inputs
             let outer_block = Block::bordered()
                 .title(Translations::get(&app.lang).modal_add_outer_title)
                 .border_style(Style::default().fg(Color::Magenta));
@@ -610,7 +583,6 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
                 Line::from(""),
             ];
 
-            // Renderizar la lista de atajos con scroll/highlight
             for (idx, (key, action)) in missing.iter().enumerate() {
                 let is_selected = idx == *selected_idx;
                 let prefix = if is_selected { "  " } else { "   " };
@@ -715,6 +687,7 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
     }
 }
 
+/// Helper function to calculate a centered rectangle layout.
 fn get_centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
     let popup_layout = Layout::default()
         .direction(Direction::Vertical)

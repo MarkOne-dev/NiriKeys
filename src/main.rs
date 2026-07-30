@@ -22,26 +22,24 @@ use system::{detect_language, get_config_path, get_package_manager};
 use translations::{Language, Translations};
 use ui::ui_draw;
 
+/// Entry point of the Nirikeys TUI application.
 fn main() -> io::Result<()> {
     let args = Args::parse();
     let config_path = get_config_path(&args.config);
     let lang = detect_language();
 
-    // 1. Inicializar la App con el idioma detectado
     let mut app = App::new(config_path, args.dry_run, lang);
     if let Err(e) = app.init() {
         eprintln!("{}: {}", Translations::get(&app.lang).msg_fatal_init, e);
         std::process::exit(1);
     }
 
-    // 3. Inicializar la terminal en modo interactivo (PTY)
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    // Animación de carga inicial
     let mut progress = 0;
     while progress <= 100 {
         let msg = match app.lang {
@@ -69,7 +67,6 @@ fn main() -> io::Result<()> {
         progress += 5;
     }
 
-    // 2. Detectar si niri está instalado
     let niri_check = Command::new("which")
         .arg("niri")
         .stdout(Stdio::null())
@@ -79,7 +76,6 @@ fn main() -> io::Result<()> {
     let niri_installed = niri_check.map(|s| s.success()).unwrap_or(false);
 
     if !niri_installed {
-        // Buscar gestor de paquetes
         if let Some(pm) = get_package_manager() {
             app.active_screen = ActiveScreen::InstallPrompt {
                 pm_name: pm.name.to_string(),
@@ -93,7 +89,6 @@ fn main() -> io::Result<()> {
             app.active_screen = ActiveScreen::ErrorPopup(err_msg);
         }
     } else {
-        // Configurar pantalla inicial correcta tras la carga
         if !app.config_path.exists() {
             app.active_screen = ActiveScreen::CreateConfigPrompt;
         } else {
@@ -103,7 +98,6 @@ fn main() -> io::Result<()> {
 
     let res = run_loop(&mut terminal, &mut app);
 
-    // Restaurar el estado de la terminal
     disable_raw_mode()?;
     execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
     terminal.show_cursor()?;
@@ -120,6 +114,7 @@ fn main() -> io::Result<()> {
     Ok(())
 }
 
+/// The main application event processing loop.
 fn run_loop(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     app: &mut App,
@@ -187,12 +182,10 @@ fn run_loop(
                                         if let Some((_, user_action)) =
                                             app.keybindings.iter().find(|(k, _)| k == &default_key)
                                         {
-                                            // Si la tecla existe pero la acción o propiedades difieren
                                             if default_action.trim() != user_action.trim() {
                                                 missing.push((default_key, default_action));
                                             }
                                         } else {
-                                            // Si la tecla no existe en absoluto
                                             missing.push((default_key, default_action));
                                         }
                                     }
@@ -232,7 +225,6 @@ fn run_loop(
                         },
                         ActiveScreen::InstallPrompt { .. } => match key.code {
                             KeyCode::Char('i') | KeyCode::Char('I') => {
-                                // 1. Suspender terminal
                                 disable_raw_mode()?;
                                 execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
                                 terminal.show_cursor()?;
@@ -245,7 +237,6 @@ fn run_loop(
                                     }
                                 );
 
-                                // 2. Obtener y ejecutar el comando del instalador
                                 let install_result = if let Some(pm) = get_package_manager() {
                                     let status = Command::new("sudo")
                                         .arg(pm.install_cmd)
@@ -282,15 +273,12 @@ fn run_loop(
                                     })
                                 };
 
-                                // 3. Re-inicializar terminal
                                 enable_raw_mode()?;
                                 execute!(io::stdout(), EnterAlternateScreen)?;
                                 terminal.clear()?;
 
-                                // 4. Procesar resultado
                                 match install_result {
                                     Ok(_) => {
-                                        // Verificar si niri está en PATH
                                         let niri_check = Command::new("which")
                                             .arg("niri")
                                             .stdout(Stdio::null())
@@ -490,7 +478,6 @@ fn run_loop(
                             _ => {}
                         },
                         ActiveScreen::ErrorPopup(_) | ActiveScreen::InfoPopup(_) => {
-                            // Cualquier tecla cierra el popup
                             app.active_screen = ActiveScreen::Dashboard;
                         }
                         ActiveScreen::Loading { .. } => {}

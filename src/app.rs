@@ -7,6 +7,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use tempfile::NamedTempFile;
 
+/// Represents the active screen state of the TUI application.
 #[derive(Clone, Debug)]
 pub enum ActiveScreen {
     Loading {
@@ -37,6 +38,7 @@ pub enum ActiveScreen {
     },
 }
 
+/// Represents a configurable layout or aesthetic setting in Niri.
 #[derive(Clone, Debug)]
 pub struct AppearanceSetting {
     pub id: String,
@@ -44,12 +46,14 @@ pub struct AppearanceSetting {
     pub value: String,
 }
 
+/// Represents the current field in focus inside the Add Shortcut popup.
 #[derive(PartialEq, Clone, Copy, Debug)]
 pub enum InputFocus {
     Key,
     Action,
 }
 
+/// The main application state container.
 pub struct App {
     pub config_path: PathBuf,
     pub dry_run: bool,
@@ -58,23 +62,18 @@ pub struct App {
     pub keybindings: Vec<(String, String)>,
     pub list_state: ListState,
     pub active_screen: ActiveScreen,
-
-    // Form Inputs
     pub input_key: String,
     pub input_action: String,
     pub input_focus: InputFocus,
-
-    // File Metadata
     pub file_size_kb: f64,
     pub file_mod_time: String,
     pub file_is_valid: bool,
-
-    // Tab Navigation & Appearance
-    pub active_tab: usize, // 0 = Keybindings, 1 = Appearance
+    pub active_tab: usize,
     pub appearance_state: ListState,
 }
 
 impl App {
+    /// Creates a new TUI App instance with the provided config path, dry-run flag, and language.
     pub fn new(config_path: PathBuf, dry_run: bool, lang: Language) -> Self {
         Self {
             config_path,
@@ -98,6 +97,7 @@ impl App {
         }
     }
 
+    /// Initializes the App state, loading the KDL document if the file exists.
     pub fn init(&mut self) -> Result<(), String> {
         if self.config_path.exists() {
             self.load_doc()?;
@@ -106,6 +106,7 @@ impl App {
         Ok(())
     }
 
+    /// Loads and parses the KDL configuration file, normalizing line endings.
     pub fn load_doc(&mut self) -> Result<(), String> {
         let raw_content = fs::read_to_string(&self.config_path).map_err(|e| match self.lang {
             Language::Es => format!("Error al leer archivo: {}", e),
@@ -123,6 +124,7 @@ impl App {
         Ok(())
     }
 
+    /// Reloads keybindings from the parsed KDL document.
     pub fn reload_keybindings(&mut self) -> Result<(), String> {
         let mut bindings = Vec::new();
         if let Some(ref doc) = self.doc {
@@ -138,7 +140,6 @@ impl App {
         }
         self.keybindings = bindings;
 
-        // Ajustar el índice de selección
         let len = self.keybindings.len();
         if len == 0 {
             self.list_state.select(None);
@@ -156,6 +157,7 @@ impl App {
         Ok(())
     }
 
+    /// Updates the configuration file metadata attributes.
     pub fn update_metadata(&mut self) {
         if let Ok(metadata) = fs::metadata(&self.config_path) {
             self.file_size_kb = (metadata.len() as f64) / 1024.0;
@@ -167,6 +169,7 @@ impl App {
         self.file_is_valid = validate_config(&self.config_path).is_ok();
     }
 
+    /// Creates a default configuration file based on the embedded template.
     pub fn create_default_config(&mut self) -> Result<(), String> {
         let parent = self.config_path.parent().ok_or_else(|| match self.lang {
             Language::Es => "No se pudo detectar el directorio raíz".to_string(),
@@ -191,8 +194,7 @@ impl App {
         Ok(())
     }
 
-    // --- ACCIONES ---
-
+    /// Moves keybinding list selection up.
     pub fn move_selection_up(&mut self) {
         if self.keybindings.is_empty() {
             return;
@@ -206,6 +208,7 @@ impl App {
         self.list_state.select(Some(next));
     }
 
+    /// Moves keybinding list selection down.
     pub fn move_selection_down(&mut self) {
         if self.keybindings.is_empty() {
             return;
@@ -219,6 +222,7 @@ impl App {
         self.list_state.select(Some(next));
     }
 
+    /// Prepares inputs and opens the Add Shortcut dialog.
     pub fn enter_add_mode(&mut self) {
         self.input_key.clear();
         self.input_action.clear();
@@ -226,6 +230,7 @@ impl App {
         self.active_screen = ActiveScreen::AddPopup;
     }
 
+    /// Deletes the currently selected keybinding from the configuration.
     pub fn delete_selected(&mut self) {
         let selected = match self.list_state.selected() {
             Some(idx) => idx,
@@ -266,6 +271,7 @@ impl App {
         }
     }
 
+    /// Creates a backup copy of the configuration file on disk.
     pub fn trigger_backup(&mut self) {
         if !self.config_path.exists() {
             self.active_screen = ActiveScreen::ErrorPopup(match self.lang {
@@ -301,6 +307,7 @@ impl App {
         }
     }
 
+    /// Toggles the focus between key combination and action input fields.
     pub fn toggle_input_focus(&mut self) {
         self.input_focus = match self.input_focus {
             InputFocus::Key => InputFocus::Action,
@@ -308,6 +315,7 @@ impl App {
         };
     }
 
+    /// Removes the last character from the active input field.
     pub fn handle_backspace(&mut self) {
         match self.input_focus {
             InputFocus::Key => {
@@ -319,6 +327,7 @@ impl App {
         }
     }
 
+    /// Pushes a character to the active input field.
     pub fn handle_char(&mut self, c: char) {
         match self.input_focus {
             InputFocus::Key => {
@@ -330,6 +339,7 @@ impl App {
         }
     }
 
+    /// Processes the submission of the Add Shortcut form.
     pub fn submit_add_form(&mut self) {
         let key = self.input_key.trim().to_string();
         let action = self.input_action.trim().to_string();
@@ -341,7 +351,6 @@ impl App {
             return;
         }
 
-        // Verificar si ya existe duplicado
         let mut exists = false;
         if let Some(ref doc) = self.doc {
             if let Some(binds_node) = doc.nodes().iter().find(|n| n.name().value() == "binds") {
@@ -358,13 +367,13 @@ impl App {
         }
     }
 
+    /// Applies a keybinding to the configuration, looking it up in the template if possible.
     pub fn apply_keybinding(&mut self, key: String, action: String) {
         let doc = match self.doc.as_mut() {
             Some(d) => d,
             Option::None => return,
         };
 
-        // Buscar o crear nodo binds
         let binds_node = if let Some(idx) = doc
             .nodes()
             .iter()
@@ -380,7 +389,6 @@ impl App {
 
         let children = binds_node.ensure_children();
 
-        // Eliminar duplicado si existe
         if let Some(pos) = children
             .nodes()
             .iter()
@@ -389,7 +397,6 @@ impl App {
             children.nodes_mut().remove(pos);
         }
 
-        // Intentar encontrar y clonar el nodo desde la plantilla default
         let default_doc = default_config::DEFAULT_CONFIG.parse::<KdlDocument>().ok();
         let mut node_to_add = None;
         if let Some(ref def_doc) = default_doc {
@@ -415,11 +422,9 @@ impl App {
             }
             node
         } else {
-            // Dividir el comando de acción inteligentemente
             let formatted_action = if Self::is_niri_native_action(&action) {
                 action
             } else if action.contains(' ') && !action.starts_with('"') {
-                // Dividir y encorchetar argumentos
                 let parts: Vec<&str> = action.split_whitespace().collect();
                 let spawn_args = parts
                     .iter()
@@ -433,7 +438,6 @@ impl App {
                 action
             };
 
-            // Generar nodo KDL
             let snippet = format!("    \"{}\" {{ {}; }}\n", key, formatted_action);
             match snippet.parse::<KdlDocument>() {
                 Ok(mut temp_doc) => temp_doc.nodes_mut().remove(0),
@@ -457,6 +461,7 @@ impl App {
         }
     }
 
+    /// Applies a batch of keybindings, checking against the default template.
     pub fn apply_keybindings_batch(
         &mut self,
         new_bindings: Vec<(String, String)>,
@@ -466,10 +471,8 @@ impl App {
             Option::None => return Err("KDL document not loaded".to_string()),
         };
 
-        // Parsear plantilla por defecto una vez para buscar nodos a clonar
         let default_doc = default_config::DEFAULT_CONFIG.parse::<KdlDocument>().ok();
 
-        // Buscar o crear nodo binds
         let binds_node = if let Some(idx) = doc
             .nodes()
             .iter()
@@ -486,7 +489,6 @@ impl App {
         let children = binds_node.ensure_children();
 
         for (key, action) in new_bindings {
-            // Eliminar duplicado si existe
             if let Some(pos) = children
                 .nodes()
                 .iter()
@@ -495,7 +497,6 @@ impl App {
                 children.nodes_mut().remove(pos);
             }
 
-            // Intentar encontrar y clonar el nodo desde la plantilla default
             let mut node_to_add = None;
             if let Some(ref def_doc) = default_doc {
                 if let Some(def_binds) =
@@ -522,7 +523,6 @@ impl App {
                 }
                 node
             } else {
-                // Dividir el comando de acción inteligentemente
                 let formatted_action = if Self::is_niri_native_action(&action) {
                     action
                 } else if action.contains(' ') && !action.starts_with('"') {
@@ -539,7 +539,6 @@ impl App {
                     action
                 };
 
-                // Generar nodo KDL
                 let snippet = format!("    \"{}\" {{ {}; }}\n", key, formatted_action);
                 snippet
                     .parse::<KdlDocument>()
@@ -557,6 +556,7 @@ impl App {
         Ok(())
     }
 
+    /// Saves the current configuration to disk and validates it using Niri.
     pub fn save_and_validate_changes(&mut self) -> Result<(), String> {
         let doc = self.doc.as_mut().ok_or_else(|| match self.lang {
             Language::Es => "No hay ningún documento cargado".to_string(),
@@ -604,7 +604,6 @@ impl App {
                 Ok(())
             }
             Err(err_msg) => {
-                // Revertir cambios en memoria recargando el archivo original
                 let _ = self.load_doc();
                 Err(err_msg)
             }
@@ -655,6 +654,7 @@ impl App {
         )
     }
 
+    /// Fetches all configurable appearance options and values.
     pub fn get_appearance_settings(&self) -> Vec<AppearanceSetting> {
         let mut settings = Vec::new();
 
@@ -663,10 +663,8 @@ impl App {
             Option::None => return settings,
         };
 
-        // Helper to find layout node
         let layout_node = doc.nodes().iter().find(|n| n.name().value() == "layout");
 
-        // Helper to find layout child setting
         let get_layout_val = |child_name: &str| -> String {
             if let Some(layout) = layout_node {
                 if let Some(children) = layout.children() {
@@ -684,7 +682,6 @@ impl App {
             "Default".to_string()
         };
 
-        // Helper to find sub-node values (like focus-ring or border)
         let get_subnode_val = |node_name: &str, child_name: &str| -> String {
             if let Some(layout) = layout_node {
                 if let Some(children) = layout.children() {
@@ -710,7 +707,6 @@ impl App {
             "Default".to_string()
         };
 
-        // Helper to check if a sub-node is active or has off/on
         let is_border_off = || -> bool {
             if let Some(layout) = layout_node {
                 if let Some(children) = layout.children() {
@@ -728,10 +724,9 @@ impl App {
                     }
                 }
             }
-            true // default off
+            true
         };
 
-        // Helper to find geometry corner radius
         let get_corner_radius = || -> String {
             for node in doc.nodes() {
                 if node.name().value() == "window-rule" {
@@ -751,7 +746,6 @@ impl App {
             "Default".to_string()
         };
 
-        // 1. Gaps
         settings.push(AppearanceSetting {
             id: "gaps".to_string(),
             name: match self.lang {
@@ -761,7 +755,6 @@ impl App {
             value: get_layout_val("gaps"),
         });
 
-        // 2. Focus Ring Width
         settings.push(AppearanceSetting {
             id: "focus_ring_width".to_string(),
             name: match self.lang {
@@ -771,7 +764,6 @@ impl App {
             value: get_subnode_val("focus-ring", "width"),
         });
 
-        // 3. Focus Ring Active Color
         settings.push(AppearanceSetting {
             id: "focus_ring_active".to_string(),
             name: match self.lang {
@@ -781,7 +773,6 @@ impl App {
             value: get_subnode_val("focus-ring", "active-color"),
         });
 
-        // 4. Focus Ring Inactive Color
         settings.push(AppearanceSetting {
             id: "focus_ring_inactive".to_string(),
             name: match self.lang {
@@ -791,7 +782,6 @@ impl App {
             value: get_subnode_val("focus-ring", "inactive-color"),
         });
 
-        // 5. Border Status
         settings.push(AppearanceSetting {
             id: "border_status".to_string(),
             name: match self.lang {
@@ -805,7 +795,6 @@ impl App {
             },
         });
 
-        // 6. Border Width
         settings.push(AppearanceSetting {
             id: "border_width".to_string(),
             name: match self.lang {
@@ -815,7 +804,6 @@ impl App {
             value: get_subnode_val("border", "width"),
         });
 
-        // 7. Border Active Color
         settings.push(AppearanceSetting {
             id: "border_active".to_string(),
             name: match self.lang {
@@ -825,7 +813,6 @@ impl App {
             value: get_subnode_val("border", "active-color"),
         });
 
-        // 8. Border Inactive Color
         settings.push(AppearanceSetting {
             id: "border_inactive".to_string(),
             name: match self.lang {
@@ -835,7 +822,6 @@ impl App {
             value: get_subnode_val("border", "inactive-color"),
         });
 
-        // 9. Corner Radius
         settings.push(AppearanceSetting {
             id: "corner_radius".to_string(),
             name: match self.lang {
@@ -848,13 +834,13 @@ impl App {
         settings
     }
 
+    /// Updates the specified appearance option to a new value in the config file.
     pub fn update_appearance_setting(&mut self, id: &str, value: String) -> Result<(), String> {
         let doc = match self.doc.as_mut() {
             Some(d) => d,
             Option::None => return Err("KDL document not loaded".to_string()),
         };
 
-        // 1. Get or create layout node
         let layout_idx = if let Some(idx) = doc
             .nodes()
             .iter()
@@ -1078,6 +1064,7 @@ impl App {
     }
 }
 
+/// Generates a display description of the actions inside a binds node.
 pub fn get_action_desc(node: &kdl::KdlNode) -> String {
     let node_entries: Vec<String> = node.entries().iter().map(|e| e.to_string()).collect();
     let entries_suffix = if node_entries.is_empty() {
@@ -1114,6 +1101,7 @@ pub fn get_action_desc(node: &kdl::KdlNode) -> String {
     }
 }
 
+/// Parses the default bundled template KDL document and returns all keybindings.
 pub fn get_default_keybindings() -> Vec<(String, String)> {
     let mut bindings = Vec::new();
     if let Ok(doc) = default_config::DEFAULT_CONFIG.parse::<KdlDocument>() {
