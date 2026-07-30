@@ -1,80 +1,65 @@
-# 🔑 NiriKeys
-
-[![Rust](https://img.shields.io/badge/rust-2024-orange.svg)](https://www.rust-lang.org)
-[![Niri](https://img.shields.io/badge/wm-niri-blue.svg)](https://github.com/YaLTeR/niri)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
-**NiriKeys** es un gestor interactivo (TUI) avanzado, rápido y seguro para el gestor de ventanas [Niri](https://github.com/YaLTeR/niri) escrito en Rust. Te permite administrar tus atajos de teclado y la apariencia estética de tu entorno directamente desde la terminal, con validación sintáctica activa en tiempo real.
-
+<p align="center">
+  <a href="https://github.com/MarkOne-dev/NiriKeys">
+    <picture>
+      <img src="https://raw.githubusercontent.com/MarkOne-dev/NiriKeys/main/assets/logo.png" alt="NiriKeys logo" width="350">
+    </picture>
+  </a>
+</p>
+<p align="center">The advanced, safe, and interactive keyboard shortcut & aesthetics manager for the Niri window manager.</p>
+<p align="center">
+  <a href="https://github.com/MarkOne-dev/NiriKeys/releases"><img alt="Releases" src="https://img.shields.io/github/v/release/MarkOne-dev/NiriKeys?style=flat-square" /></a>
+  <a href="https://github.com/MarkOne-dev/NiriKeys/actions"><img alt="Build Status" src="https://img.shields.io/github/actions/workflow/status/MarkOne-dev/NiriKeys/publish.yml?style=flat-square&branch=main" /></a>
+  <a href="https://opensource.org/licenses/MIT"><img alt="License" src="https://img.shields.io/github/license/MarkOne-dev/NiriKeys?style=flat-square" /></a>
+</p>
 ---
 
-## 🎨 Características Principales
+### Installation
 
-*   **Pestaña de Atajos de Teclado**: Añade, edita y elimina tus combinaciones de teclas de forma visual e intuitiva.
-*   **Pestaña de Configuración Estética**: Modifica de manera directa el espaciado (gaps), grosor y colores del borde de ventana, grosor y colores del anillo de foco y el radio de redondeo de las esquinas (`geometry-corner-radius`).
-*   **Validación de Sintaxis Activa**: Cada cambio es validado automáticamente con `niri validate` en una copia temporal en memoria antes de guardarse físicamente, evitando que tu entorno se rompa.
-*   **Importación Inteligente**: Detecta atajos faltantes comparando tu archivo con la plantilla oficial y te permite importarlos uno a uno o todos de un solo golpe.
-*   **Respaldos Automáticos**: Crea copias de seguridad de tu archivo de configuración (`config.kdl.bak`) con una sola tecla.
-*   **Soporte Multilingüe**: Interfaz completamente adaptada en Español e Inglés con detección automática según el idioma del sistema.
-
----
-
-## 🚀 Instalación Rápida desde la Terminal
-
-Puedes instalar y usar **NiriKeys** directamente de las siguientes maneras:
-
-### 1. Instalación de un solo comando (Recomendado)
-Puedes ejecutar el script de instalación automática que comprobará si tienes Rust instalado, lo instalará si hace falta, compilará e instalará **NiriKeys**:
 ```bash
+# Easy installer script (YOLO)
 curl -sSL https://raw.githubusercontent.com/MarkOne-dev/NiriKeys/main/install.sh | bash
-```
-*(Nota: Si es la primera vez que instalas Rust con este script, se te pedirá reiniciar tu terminal o cargar `source "$HOME/.cargo/env"`).*
 
----
-
-### 2. Usando Cargo (Desarrolladores Rust)
-Si ya tienes Rust y Cargo instalados en tu sistema, puedes instalar la última versión directo desde el repositorio ejecutando:
-```bash
+# Install from GitHub via cargo
 cargo install --git https://github.com/MarkOne-dev/NiriKeys.git
-```
-*(Asegúrate de tener `~/.cargo/bin` en tu variable `$PATH` para poder ejecutarlo con el comando `nirikeys`)*.
 
----
-
-### 2. Método Manual (Compilar desde el código)
-Clona el repositorio, compílalo en modo optimizado y cópialo a tu ruta de ejecutables:
-```bash
-git clone https://github.com/MarkOne-dev/NiriKeys.git
-cd NiriKeys
-cargo build --release
-cp target/release/nirikeys ~/.local/bin/
-```
-
----
-
-### 3. Descarga Directa del Binario (Para cualquier distribución Linux)
-Una vez configurado el lanzamiento en el repositorio, cualquier usuario puede descargar el ejecutable listo para usar y colocarlo en su `$PATH` corriendo una única línea en la terminal:
-```bash
+# Download the latest compiled binary
 curl -L https://github.com/MarkOne-dev/NiriKeys/releases/latest/download/nirikeys -o ~/.local/bin/nirikeys && chmod +x ~/.local/bin/nirikeys
 ```
-*(Nota: Este comando asume que el directorio `~/.local/bin/` existe y está en tu `$PATH`)*.
+
+> [!TIP]
+> Ensure that `~/.local/bin` (or your chosen binary path) is in your shell's `$PATH` variable.
+
+### Features
+
+- **Keyboard Shortcuts Tab**: Add, edit, and delete your bindings visually and intuitively.
+- **Aesthetic Configuration Tab**: Modify window gaps, border status (on/off), width, colors, focus-ring details, and corner radius directly.
+- **Active Syntax Validation**: Changes are verified in memory with `niri validate` before saving physically, preventing a broken environment.
+- **Template Merging**: Instantly compare your active configuration with the official standard template to find and import missing keybindings.
+- **Automatic Backups**: Keep copies of your working configuration file with a single keypress.
+- **Auto Language Detection**: Seamless TUI language switching between English and Spanish.
+
+### TUI Navigation Controls
+
+| Keypress | Action |
+| --- | --- |
+| `1` | Switch to **Keybindings** tab |
+| `2` | Switch to **Aesthetic Configuration** tab |
+| `↑/↓` or `j/k` | Navigate lists or properties |
+| `a` | Add a new keybinding (Keybindings tab only) |
+| `d` | Delete selected keybinding (Keybindings tab only) |
+| `e` or `Enter` | Edit selected option (Aesthetic tab only) |
+| `c` / `C` | Compare and merge shortcuts from the official template |
+| `b` | Create a manual backup of your config file |
+| `q` or `Esc` | Quit the application or close popups |
+
+### Documentation
+
+For more instructions and settings, please check the [**Official Niri Documentation**](https://github.com/YaLTeR/niri).
+
+### Contributing
+
+Pull requests and issues are welcome! Feel free to fork the repository and submit your contributions.
 
 ---
 
-## 🛠️ Controles de la TUI
-
-*   `1`: Cambiar a la pestaña de **Atajos de Teclado**.
-*   `2`: Cambiar a la pestaña de **Apariencia Visual**.
-*   `↑ / ↓` o `j / k`: Navegar por la lista de atajos o propiedades estéticas.
-*   `a`: Añadir un nuevo atajo (solo en pestaña de atajos).
-*   `d`: Eliminar el atajo seleccionado (solo en pestaña de atajos).
-*   `e` o `Enter`: Editar la propiedad estética seleccionada (solo en pestaña de apariencia).
-*   `c`: Mostrar e importar atajos faltantes recomendados desde la plantilla oficial.
-*   `b`: Crear una copia de seguridad manual de tu configuración actual.
-*   `q` o `Esc`: Salir de la aplicación o cerrar los menús emergentes.
-
----
-
-## 📄 Licencia
-
-Este proyecto está bajo la Licencia MIT. Consulta el archivo para más detalles.
+**Follow the project** [GitHub](https://github.com/MarkOne-dev/NiriKeys)
