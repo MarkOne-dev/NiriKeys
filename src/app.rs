@@ -98,11 +98,12 @@ impl App {
     }
 
     pub fn load_doc(&mut self) -> Result<(), String> {
-        let content = fs::read_to_string(&self.config_path)
+        let raw_content = fs::read_to_string(&self.config_path)
             .map_err(|e| match self.lang {
                 Language::Es => format!("Error al leer archivo: {}", e),
                 Language::En => format!("Error reading file: {}", e),
             })?;
+        let content = raw_content.replace("\r\n", "\n").replace('\r', "\n");
         
         let parsed_doc: KdlDocument = content.parse()
             .map_err(|e| match self.lang {
