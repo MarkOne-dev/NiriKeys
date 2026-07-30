@@ -346,30 +346,53 @@ impl App {
             children.nodes_mut().remove(pos);
         }
 
-        // Dividir el comando de acción inteligentemente
-        let formatted_action = if Self::is_niri_native_action(&action) {
-            action
-        } else if action.contains(' ') && !action.starts_with('"') {
-            // Dividir y encorchetar argumentos
-            let parts: Vec<&str> = action.split_whitespace().collect();
-            let spawn_args = parts.iter().map(|p| format!("\"{}\"", p)).collect::<Vec<_>>().join(" ");
-            format!("spawn {}", spawn_args)
-        } else if !action.starts_with('"') {
-            format!("spawn \"{}\"", action)
-        } else {
-            action
-        };
+        // Intentar encontrar y clonar el nodo desde la plantilla default
+        let default_doc = default_config::DEFAULT_CONFIG.parse::<KdlDocument>().ok();
+        let mut node_to_add = None;
+        if let Some(ref def_doc) = default_doc {
+            if let Some(def_binds) = def_doc.nodes().iter().find(|n| n.name().value() == "binds") {
+                if let Some(def_children) = def_binds.children() {
+                    if let Some(found_node) = def_children.nodes().iter().find(|n| n.name().value() == key) {
+                        node_to_add = Some(found_node.clone());
+                    }
+                }
+            }
+        }
 
-        // Generar nodo KDL
-        let snippet = format!("    \"{}\" {{ {}; }}\n", key, formatted_action);
-        let parsed_snippet = match snippet.parse::<KdlDocument>() {
-            Ok(mut temp_doc) => temp_doc.nodes_mut().remove(0),
-            Err(e) => {
-                self.active_screen = ActiveScreen::ErrorPopup(match self.lang {
-                    Language::Es => format!("KDL inválido: {}", e),
-                    Language::En => format!("Invalid KDL: {}", e),
-                });
-                return;
+        let parsed_snippet = if let Some(mut node) = node_to_add {
+            if let Some(fmt) = node.format_mut() {
+                fmt.leading = "    ".to_string();
+                if !fmt.terminator.ends_with('\n') {
+                    fmt.terminator = "\n".to_string();
+                }
+            }
+            node
+        } else {
+            // Dividir el comando de acción inteligentemente
+            let formatted_action = if Self::is_niri_native_action(&action) {
+                action
+            } else if action.contains(' ') && !action.starts_with('"') {
+                // Dividir y encorchetar argumentos
+                let parts: Vec<&str> = action.split_whitespace().collect();
+                let spawn_args = parts.iter().map(|p| format!("\"{}\"", p)).collect::<Vec<_>>().join(" ");
+                format!("spawn {}", spawn_args)
+            } else if !action.starts_with('"') {
+                format!("spawn \"{}\"", action)
+            } else {
+                action
+            };
+
+            // Generar nodo KDL
+            let snippet = format!("    \"{}\" {{ {}; }}\n", key, formatted_action);
+            match snippet.parse::<KdlDocument>() {
+                Ok(mut temp_doc) => temp_doc.nodes_mut().remove(0),
+                Err(e) => {
+                    self.active_screen = ActiveScreen::ErrorPopup(match self.lang {
+                        Language::Es => format!("KDL inválido: {}", e),
+                        Language::En => format!("Invalid KDL: {}", e),
+                    });
+                    return;
+                }
             }
         };
 
@@ -387,6 +410,9 @@ impl App {
             Some(d) => d,
             Option::None => return Err("KDL document not loaded".to_string()),
         };
+
+        // Parsear plantilla por defecto una vez para buscar nodos a clonar
+        let default_doc = default_config::DEFAULT_CONFIG.parse::<KdlDocument>().ok();
 
         // Buscar o crear nodo binds
         let binds_node = if let Some(idx) = doc.nodes().iter().position(|node| node.name().value() == "binds") {
@@ -406,25 +432,47 @@ impl App {
                 children.nodes_mut().remove(pos);
             }
 
-            // Dividir el comando de acción inteligentemente
-            let formatted_action = if Self::is_niri_native_action(&action) {
-                action
-            } else if action.contains(' ') && !action.starts_with('"') {
-                let parts: Vec<&str> = action.split_whitespace().collect();
-                let spawn_args = parts.iter().map(|p| format!("\"{}\"", p)).collect::<Vec<_>>().join(" ");
-                format!("spawn {}", spawn_args)
-            } else if !action.starts_with('"') {
-                format!("spawn \"{}\"", action)
+            // Intentar encontrar y clonar el nodo desde la plantilla default
+            let mut node_to_add = None;
+            if let Some(ref def_doc) = default_doc {
+                if let Some(def_binds) = def_doc.nodes().iter().find(|n| n.name().value() == "binds") {
+                    if let Some(def_children) = def_binds.children() {
+                        if let Some(found_node) = def_children.nodes().iter().find(|n| n.name().value() == key) {
+                            node_to_add = Some(found_node.clone());
+                        }
+                    }
+                }
+            }
+
+            let parsed_node = if let Some(mut node) = node_to_add {
+                if let Some(fmt) = node.format_mut() {
+                    fmt.leading = "    ".to_string();
+                    if !fmt.terminator.ends_with('\n') {
+                        fmt.terminator = "\n".to_string();
+                    }
+                }
+                node
             } else {
-                action
+                // Dividir el comando de acción inteligentemente
+                let formatted_action = if Self::is_niri_native_action(&action) {
+                    action
+                } else if action.contains(' ') && !action.starts_with('"') {
+                    let parts: Vec<&str> = action.split_whitespace().collect();
+                    let spawn_args = parts.iter().map(|p| format!("\"{}\"", p)).collect::<Vec<_>>().join(" ");
+                    format!("spawn {}", spawn_args)
+                } else if !action.starts_with('"') {
+                    format!("spawn \"{}\"", action)
+                } else {
+                    action
+                };
+
+                // Generar nodo KDL
+                let snippet = format!("    \"{}\" {{ {}; }}\n", key, formatted_action);
+                snippet.parse::<KdlDocument>()
+                    .map_err(|e| format!("KDL snippet parse error: {} for snippet: {}", e, snippet))?
+                    .nodes_mut().remove(0)
             };
 
-            // Generar nodo KDL
-            let snippet = format!("    \"{}\" {{ {}; }}\n", key, formatted_action);
-            let parsed_node = snippet.parse::<KdlDocument>()
-                .map_err(|e| format!("KDL snippet parse error: {} for snippet: {}", e, snippet))?
-                .nodes_mut().remove(0);
-            
             children.nodes_mut().push(parsed_node);
         }
 
