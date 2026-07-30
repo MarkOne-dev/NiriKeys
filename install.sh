@@ -88,10 +88,10 @@ echo -e "\n${BLUE}[*] Compilando e instalando NiriKeys...${NC}"
 # Detectar si estamos ejecutando el script desde el repositorio clonado localmente
 if [ -f "Cargo.toml" ]; then
     echo -e "${BLUE}[*] Detectado entorno local de desarrollo. Instalando desde el directorio local...${NC}"
-    cargo install --path .
+    cargo install --force --path .
 else
     echo -e "${BLUE}[*] Descargando e instalando NiriKeys desde el repositorio remoto oficial...${NC}"
-    cargo install --git https://github.com/MarkOne-dev/NiriKeys.git
+    cargo install --force --git https://github.com/MarkOne-dev/NiriKeys.git
 fi
 
 if [ $? -eq 0 ]; then
