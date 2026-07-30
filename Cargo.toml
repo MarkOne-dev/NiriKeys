@@ -1,0 +1,15 @@
+[package]
+name = "nirikeys"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+kdl = { version = "6.7.1", features = ["v1-fallback"] }
+ratatui = "0.30.0"
+crossterm = "0.29.0"
+owo-colors = "4.3.0"
+clap = { version = "4.5", features = ["derive"] }
+dirs = "5.0.1"
+tempfile = "3.10.1"
+chrono = "0.4.38"
+console = "0.15.11"
