@@ -1,6 +1,6 @@
+use crate::translations::Language;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use crate::translations::Language;
 
 pub struct PackageManager {
     pub name: &'static str,
@@ -10,7 +10,14 @@ pub struct PackageManager {
 
 pub fn get_package_manager() -> Option<PackageManager> {
     // 1. Verificar pacman (Arch Linux)
-    if Command::new("which").arg("pacman").stdout(Stdio::null()).stderr(Stdio::null()).status().map(|s| s.success()).unwrap_or(false) {
+    if Command::new("which")
+        .arg("pacman")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+    {
         return Some(PackageManager {
             name: "Arch Linux (pacman)",
             install_cmd: "pacman",
@@ -18,7 +25,14 @@ pub fn get_package_manager() -> Option<PackageManager> {
         });
     }
     // 2. Verificar dnf (Fedora)
-    if Command::new("which").arg("dnf").stdout(Stdio::null()).stderr(Stdio::null()).status().map(|s| s.success()).unwrap_or(false) {
+    if Command::new("which")
+        .arg("dnf")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+    {
         return Some(PackageManager {
             name: "Fedora (dnf)",
             install_cmd: "dnf",
@@ -26,7 +40,14 @@ pub fn get_package_manager() -> Option<PackageManager> {
         });
     }
     // 3. Verificar zypper (openSUSE)
-    if Command::new("which").arg("zypper").stdout(Stdio::null()).stderr(Stdio::null()).status().map(|s| s.success()).unwrap_or(false) {
+    if Command::new("which")
+        .arg("zypper")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+    {
         return Some(PackageManager {
             name: "openSUSE (zypper)",
             install_cmd: "zypper",
@@ -34,7 +55,14 @@ pub fn get_package_manager() -> Option<PackageManager> {
         });
     }
     // 4. Verificar apt-get (Ubuntu/Debian)
-    if Command::new("which").arg("apt-get").stdout(Stdio::null()).stderr(Stdio::null()).status().map(|s| s.success()).unwrap_or(false) {
+    if Command::new("which")
+        .arg("apt-get")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+    {
         return Some(PackageManager {
             name: "Debian/Ubuntu (apt-get)",
             install_cmd: "apt-get",
@@ -49,7 +77,7 @@ pub fn detect_language() -> Language {
         .or_else(|_| std::env::var("LC_ALL"))
         .or_else(|_| std::env::var("LC_MESSAGES"))
         .unwrap_or_else(|_| "en".to_string());
-    
+
     if lang_env.to_lowercase().starts_with("es") {
         Language::Es
     } else {
