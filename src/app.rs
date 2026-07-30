@@ -433,10 +433,11 @@ impl App {
     }
 
     pub fn save_and_validate_changes(&mut self) -> Result<(), String> {
-        let doc = self.doc.as_ref().ok_or_else(|| match self.lang {
+        let doc = self.doc.as_mut().ok_or_else(|| match self.lang {
             Language::Es => "No hay ningún documento cargado".to_string(),
             Language::En => "No document loaded".to_string(),
         })?;
+        Self::fix_trailing_comments(doc);
         let serialized = doc.to_string();
 
         if self.dry_run {
@@ -856,6 +857,25 @@ impl App {
 
         self.save_and_validate_changes()?;
         Ok(())
+    }
+
+    fn fix_trailing_comments(doc: &mut kdl::KdlDocument) {
+        for node in doc.nodes_mut() {
+            Self::fix_node_comments(node);
+        }
+    }
+
+    fn fix_node_comments(node: &mut kdl::KdlNode) {
+        if let Some(format) = node.format_mut() {
+            let trimmed = format.trailing.trim_start();
+            if trimmed.starts_with("//") && !format.trailing.ends_with('\n') {
+                format.trailing.push('\n');
+            }
+        }
+        
+        if let Some(children) = node.children_mut() {
+            Self::fix_trailing_comments(children);
+        }
     }
 }
 
