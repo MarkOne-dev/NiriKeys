@@ -1,10 +1,5 @@
-<p align="center">
-  <a href="https://github.com/MarkOne-dev/NiriKeys">
-    <picture>
-      <img src="src/assets/interface-image.png" alt="NiriKeys logo" width="750">
-    </picture>
-  </a>
-</p>
+<h1 align="center">NiriKeys</h1>
+
 <p align="center">The advanced, safe, and interactive keyboard shortcut & aesthetics manager for the Niri window manager.</p>
 <p align="center">
   <a href="https://github.com/MarkOne-dev/NiriKeys/releases"><img alt="Releases" src="https://img.shields.io/github/v/release/MarkOne-dev/NiriKeys?style=flat-square" /></a>
@@ -14,6 +9,10 @@
 
 > [!IMPORTANT]
 > This application is specifically designed and optimized to work **only** with the **Noctalia Shell** environment.
+
+<p align="center">
+  <img src="src/assets/interface-image.png" alt="NiriKeys Interface" width="750">
+</p>
 
 ---
 
