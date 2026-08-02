@@ -155,7 +155,7 @@ binds {
     Mod+Shift+Slash { show-hotkey-overlay; }
 
     // Core Applications
-    Mod+T hotkey-overlay-title="Open Terminal" { spawn "alacritty"; }
+    Mod+T hotkey-overlay-title="Open Terminal" { spawn "ghostty"; }
     Mod+Escape allow-inhibiting=false { toggle-keyboard-shortcuts-inhibit; }
 
     // Noctalia Shell Integration
