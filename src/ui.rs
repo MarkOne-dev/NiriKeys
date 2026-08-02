@@ -11,6 +11,15 @@ use ratatui::{
 /// Draws the entire TUI application interface based on the active screen state.
 pub fn ui_draw(frame: &mut Frame, app: &mut App) {
     let size = frame.area();
+    
+    let get_display_path = |path: &std::path::Path| -> String {
+        if let Some(home) = dirs::home_dir() {
+            if let Ok(stripped) = path.strip_prefix(&home) {
+                return format!("~/{}", stripped.display());
+            }
+        }
+        path.to_string_lossy().into_owned()
+    };
 
     if let ActiveScreen::Loading {
         progress,
@@ -98,8 +107,10 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
         ActiveScreen::Dashboard => {
             if app.active_tab == 0 {
                 Translations::get(&app.lang).help_dashboard
-            } else {
+            } else if app.active_tab == 1 {
                 Translations::get(&app.lang).help_appearance
+            } else {
+                Translations::get(&app.lang).help_noctalia
             }
         }
         ActiveScreen::CreateConfigPrompt => Translations::get(&app.lang).help_create_config,
@@ -111,6 +122,9 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
         ActiveScreen::InstallPrompt { .. } => Translations::get(&app.lang).help_install,
         ActiveScreen::MergePopup { .. } => Translations::get(&app.lang).help_merge,
         ActiveScreen::EditAppearancePopup { .. } => {
+            Translations::get(&app.lang).modal_appearance_guide
+        }
+        ActiveScreen::EditNoctaliaPopup { .. } => {
             Translations::get(&app.lang).modal_appearance_guide
         }
         ActiveScreen::Loading { .. } => "",
@@ -131,6 +145,7 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
     let tab_titles = vec![
         Translations::get(&app.lang).tab_shortcuts,
         Translations::get(&app.lang).tab_appearance,
+        Translations::get(&app.lang).tab_noctalia,
     ];
     let tab_spans = tab_titles
         .iter()
@@ -165,86 +180,191 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
     );
     frame.render_widget(tabs_widget, dashboard_chunks[0]);
 
-    let main_layout = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(35), Constraint::Percentage(65)])
+    let main_vertical_chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
         .split(dashboard_chunks[1]);
 
-    let left_chunks = Layout::default()
+    let upper_layout = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(35), Constraint::Percentage(65)])
+        .split(main_vertical_chunks[0]);
+
+    let left_upper_chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(9), Constraint::Min(4)])
-        .split(main_layout[0]);
+        .constraints([Constraint::Length(7), Constraint::Min(3)])
+        .split(upper_layout[0]);
 
-    let status_style = if app.file_is_valid {
-        Style::default()
-            .fg(Color::Green)
-            .add_modifier(Modifier::BOLD)
+    let (metadata_text, metadata_title, metadata_border_color) = if app.active_tab == 2 {
+        let status_style = if app.noctalia_config.is_some() && app.noctalia_is_valid {
+            Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
+        };
+
+        let status_text = if !app.noctalia_path.exists() {
+            Translations::get(&app.lang).noctalia_not_found
+        } else if app.noctalia_is_valid {
+            Translations::get(&app.lang).valid
+        } else {
+            Translations::get(&app.lang).noctalia_invalid
+        };
+
+        (
+            vec![
+                Line::from(vec![
+                    Span::styled(
+                        Translations::get(&app.lang).path,
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                    Span::styled(
+                        get_display_path(&app.noctalia_path),
+                        Style::default().fg(Color::Cyan),
+                    ),
+                ]),
+                Line::from(vec![
+                    Span::styled(
+                        Translations::get(&app.lang).syntax,
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                    Span::styled(status_text, status_style),
+                ]),
+            ],
+            Translations::get(&app.lang).noctalia_entorno_title,
+            Color::Magenta,
+        )
     } else {
-        Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
-    };
+        let status_style = if app.file_is_valid {
+            Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
+        };
 
-    let status_text = if app.file_is_valid {
-        Translations::get(&app.lang).valid
-    } else {
-        Translations::get(&app.lang).invalid
-    };
+        let status_text = if app.file_is_valid {
+            Translations::get(&app.lang).valid
+        } else {
+            Translations::get(&app.lang).invalid
+        };
 
-    let metadata_text = vec![
-        Line::from(vec![
-            Span::styled(
-                Translations::get(&app.lang).path,
-                Style::default().fg(Color::DarkGray),
-            ),
-            Span::styled(
-                app.config_path.to_string_lossy(),
-                Style::default().fg(Color::Cyan),
-            ),
-        ]),
-        Line::from(vec![
-            Span::styled(
-                Translations::get(&app.lang).size,
-                Style::default().fg(Color::DarkGray),
-            ),
-            Span::styled(
-                format!("{:.2} KB", app.file_size_kb),
-                Style::default().fg(Color::Yellow),
-            ),
-        ]),
-        Line::from(vec![
-            Span::styled(
-                Translations::get(&app.lang).modif,
-                Style::default().fg(Color::DarkGray),
-            ),
-            Span::styled(&app.file_mod_time, Style::default().fg(Color::Blue)),
-        ]),
-        Line::from(vec![
-            Span::styled(
-                Translations::get(&app.lang).syntax,
-                Style::default().fg(Color::DarkGray),
-            ),
-            Span::styled(status_text, status_style),
-        ]),
-    ];
+        (
+            vec![
+                Line::from(vec![
+                    Span::styled(
+                        Translations::get(&app.lang).path,
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                    Span::styled(
+                        get_display_path(&app.config_path),
+                        Style::default().fg(Color::Cyan),
+                    ),
+                ]),
+                Line::from(vec![
+                    Span::styled(
+                        Translations::get(&app.lang).size,
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                    Span::styled(
+                        format!("{:.2} KB", app.file_size_kb),
+                        Style::default().fg(Color::Yellow),
+                    ),
+                ]),
+                Line::from(vec![
+                    Span::styled(
+                        Translations::get(&app.lang).modif,
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                    Span::styled(&app.file_mod_time, Style::default().fg(Color::Blue)),
+                ]),
+                Line::from(vec![
+                    Span::styled(
+                        Translations::get(&app.lang).syntax,
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                    Span::styled(status_text, status_style),
+                ]),
+            ],
+            Translations::get(&app.lang).entorno_title,
+            Color::Cyan,
+        )
+    };
 
     let metadata_card = Paragraph::new(metadata_text).block(
         Block::bordered()
-            .title(Translations::get(&app.lang).entorno_title)
-            .border_style(Style::default().fg(Color::Cyan)),
+            .title(metadata_title)
+            .border_style(Style::default().fg(metadata_border_color)),
     );
-    frame.render_widget(metadata_card, left_chunks[0]);
+    frame.render_widget(metadata_card, left_upper_chunks[0]);
 
-    let info_text = vec![
-        Line::from(Translations::get(&app.lang).info_line1),
-        Line::from(Translations::get(&app.lang).info_line2),
-        Line::from(Translations::get(&app.lang).info_line3),
-        Line::from(Translations::get(&app.lang).info_line4),
-    ];
-    let info_card = Paragraph::new(info_text).block(
-        Block::bordered()
-            .title(Translations::get(&app.lang).info_title)
-            .border_style(Style::default().fg(Color::DarkGray)),
-    );
-    frame.render_widget(info_card, left_chunks[1]);
+    // --- LIVE FILE PREVIEW ---
+    let preview_raw = app.get_live_file_preview();
+    let preview_lines: Vec<Line> = preview_raw
+        .lines()
+        .enumerate()
+        .map(|(i, line)| {
+            Line::from(vec![
+                Span::styled(format!("{:3} │ ", i + 1), Style::default().fg(Color::DarkGray)),
+                Span::raw(line),
+            ])
+        })
+        .collect();
+
+    let preview_height = main_vertical_chunks[1].height as usize;
+    let max_scroll = if preview_lines.len() > preview_height.saturating_sub(2) {
+        (preview_lines.len() - (preview_height.saturating_sub(2))) as u16
+    } else {
+        0
+    };
+    if app.preview_scroll > max_scroll {
+        app.preview_scroll = max_scroll;
+    }
+
+    let preview_card = Paragraph::new(preview_lines)
+        .scroll((app.preview_scroll, 0))
+        .block(
+            Block::bordered()
+                .title(match app.lang {
+                    Language::Es => " Previsualización en Vivo [ [ / ] ] ",
+                    Language::En => " Live Preview [ [ / ] ] ",
+                })
+                .border_style(Style::default().fg(Color::DarkGray)),
+        );
+    frame.render_widget(preview_card, main_vertical_chunks[1]);
+
+    // --- AGENT ACTIVITY LOGS ---
+    let log_lines: Vec<Line> = app
+        .agent_logs
+        .iter()
+        .map(|log| {
+            let parts: Vec<&str> = log.splitn(2, ']').collect();
+            if parts.len() == 2 {
+                Line::from(vec![
+                    Span::styled(format!("{}]", parts[0]), Style::default().fg(Color::DarkGray)),
+                    Span::styled(parts[1].to_string(), Style::default().fg(Color::Green)),
+                ])
+            } else {
+                Line::from(vec![Span::raw(log)])
+            }
+        })
+        .collect();
+
+    let logs_height = left_upper_chunks[1].height as usize;
+    let log_scroll = if log_lines.len() > logs_height.saturating_sub(2) {
+        (log_lines.len() - (logs_height.saturating_sub(2))) as u16
+    } else {
+        0
+    };
+
+    let logs_card = Paragraph::new(log_lines)
+        .scroll((log_scroll, 0))
+        .block(
+            Block::bordered()
+                .title(match app.lang {
+                    Language::Es => " Bitácora del Agente ",
+                    Language::En => " Agent Activity Log ",
+                })
+                .border_style(Style::default().fg(Color::DarkGray)),
+        );
+    frame.render_widget(logs_card, left_upper_chunks[1]);
 
     if app.active_tab == 0 {
         let list_items: Vec<ListItem> = app
@@ -281,8 +401,8 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
             )
             .highlight_symbol("  ");
 
-        frame.render_stateful_widget(list_widget, main_layout[1], &mut app.list_state);
-    } else {
+        frame.render_stateful_widget(list_widget, upper_layout[1], &mut app.list_state);
+    } else if app.active_tab == 1 {
         let settings = app.get_appearance_settings();
         let list_items: Vec<ListItem> = settings
             .iter()
@@ -313,7 +433,39 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
             )
             .highlight_symbol("  ");
 
-        frame.render_stateful_widget(list_widget, main_layout[1], &mut app.appearance_state);
+        frame.render_stateful_widget(list_widget, upper_layout[1], &mut app.appearance_state);
+    } else {
+        let list_items: Vec<ListItem> = app
+            .noctalia_settings
+            .iter()
+            .map(|setting| {
+                ListItem::new(vec![Line::from(vec![
+                    Span::styled(
+                        format!("  {:width$} ", setting.name, width = 45),
+                        Style::default()
+                            .fg(Color::Magenta)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled("   ", Style::default().fg(Color::DarkGray)),
+                    Span::styled(setting.value.clone(), Style::default().fg(Color::White)),
+                ])])
+            })
+            .collect();
+
+        let list_widget = List::new(list_items)
+            .block(
+                Block::bordered()
+                    .title(" Ajustes de Noctalia UI ")
+                    .border_style(Style::default().fg(Color::Magenta)),
+            )
+            .highlight_style(
+                Style::default()
+                    .bg(Color::Rgb(40, 44, 52))
+                    .add_modifier(Modifier::BOLD),
+            )
+            .highlight_symbol("  ");
+
+        frame.render_stateful_widget(list_widget, upper_layout[1], &mut app.noctalia_state);
     }
 
     match &app.active_screen {
@@ -662,6 +814,45 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
                 Line::from(
                     Translations::get(&app.lang)
                         .modal_appearance_msg
+                        .replace("{}", setting_name),
+                ),
+                Line::from(""),
+                Line::from(vec![
+                    Span::styled("   ", Style::default()),
+                    Span::styled(
+                        format!("{}_", input_value),
+                        Style::default()
+                            .fg(Color::Cyan)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                ]),
+                Line::from(""),
+                Line::from(Translations::get(&app.lang).modal_appearance_guide).dim(),
+            ];
+
+            let prompt_paragraph = Paragraph::new(prompt_text)
+                .block(popup_block)
+                .alignment(ratatui::layout::Alignment::Center);
+            frame.render_widget(prompt_paragraph, popup_area);
+        }
+        ActiveScreen::EditNoctaliaPopup {
+            setting_id: _,
+            setting_name,
+            input_value,
+            value_type: _,
+        } => {
+            let popup_area = get_centered_rect(60, 25, size);
+            frame.render_widget(Clear, popup_area);
+
+            let popup_block = Block::bordered()
+                .title(Translations::get(&app.lang).modal_noctalia_title)
+                .border_style(Style::default().fg(Color::Magenta));
+
+            let prompt_text = vec![
+                Line::from(""),
+                Line::from(
+                    Translations::get(&app.lang)
+                        .modal_noctalia_msg
                         .replace("{}", setting_name),
                 ),
                 Line::from(""),

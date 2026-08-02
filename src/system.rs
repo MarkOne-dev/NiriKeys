@@ -128,3 +128,33 @@ pub fn validate_config(path: &Path) -> Result<(), String> {
         )),
     }
 }
+
+/// Validates the Noctalia TOML config file by calling 'noctalia config validate'.
+pub fn validate_noctalia_config(path: &Path) -> Result<(), String> {
+    let output = Command::new("noctalia")
+        .arg("config")
+        .arg("validate")
+        .arg(path)
+        .output();
+
+    match output {
+        Ok(out) => {
+            if out.status.success() {
+                Ok(())
+            } else {
+                let stderr = String::from_utf8_lossy(&out.stderr).to_string();
+                let stdout = String::from_utf8_lossy(&out.stdout).to_string();
+                let combined = format!("{}{}", stdout, stderr);
+                Err(if combined.trim().is_empty() {
+                    "Unknown validation error.".to_string()
+                } else {
+                    combined
+                })
+            }
+        }
+        Err(e) => Err(format!(
+            "Could not execute 'noctalia config validate'. Is Noctalia installed? Detail: {}",
+            e
+        )),
+    }
+}

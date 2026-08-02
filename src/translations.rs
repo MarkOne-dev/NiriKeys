@@ -75,6 +75,15 @@ pub struct Translations {
     pub modal_appearance_guide: &'static str,
     pub modal_appearance_msg: &'static str,
     pub msg_appearance_success: &'static str,
+
+    pub tab_noctalia: &'static str,
+    pub help_noctalia: &'static str,
+    pub modal_noctalia_title: &'static str,
+    pub modal_noctalia_msg: &'static str,
+    pub msg_noctalia_success: &'static str,
+    pub noctalia_not_found: &'static str,
+    pub noctalia_invalid: &'static str,
+    pub noctalia_entorno_title: &'static str,
 }
 
 pub const ES: Translations = Translations {
@@ -145,6 +154,15 @@ pub const ES: Translations = Translations {
     modal_appearance_guide: " [Enter] Validar y Guardar   [Esc] Cancelar ",
     modal_appearance_msg: " Ingresa el nuevo valor para '{}': ",
     msg_appearance_success: " Propiedad estética actualizada correctamente",
+
+    tab_noctalia: " Noctalia UI [3] ",
+    help_noctalia: " [↑/↓-j/k] Navegar  [Enter/e] Editar Ajuste  [b] Backup  [q] Salir ",
+    modal_noctalia_title: " Editar Ajuste de Noctalia ",
+    modal_noctalia_msg: " Ingresa el nuevo valor para '{}': ",
+    msg_noctalia_success: " Ajuste de Noctalia actualizado correctamente",
+    noctalia_not_found: "Noctalia no está configurada o ejecutándose en el sistema (no se encontró settings.toml)",
+    noctalia_invalid: "La configuración TOML de Noctalia no es válida",
+    noctalia_entorno_title: " Noctalia Shell ",
 };
 
 pub const EN: Translations = Translations {
@@ -215,6 +233,15 @@ pub const EN: Translations = Translations {
     modal_appearance_guide: " [Enter] Validate & Save   [Esc] Cancel ",
     modal_appearance_msg: " Enter the new value for '{}': ",
     msg_appearance_success: " Aesthetic property updated successfully",
+
+    tab_noctalia: " Noctalia UI [3] ",
+    help_noctalia: " [↑/↓-j/k] Navigate  [Enter/e] Edit Setting  [b] Backup  [q] Quit ",
+    modal_noctalia_title: " Edit Noctalia Setting ",
+    modal_noctalia_msg: " Enter the new value for '{}': ",
+    msg_noctalia_success: " Noctalia setting updated successfully",
+    noctalia_not_found: "Noctalia is not configured or running on the system (settings.toml not found)",
+    noctalia_invalid: "Noctalia TOML configuration is invalid",
+    noctalia_entorno_title: " Noctalia Shell ",
 };
 
 impl Translations {
