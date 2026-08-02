@@ -6,7 +6,7 @@ use crossterm::{
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
 use std::io;
-use std::process::{Command, Stdio};
+use std::process::Command;
 use std::time::Duration;
 
 mod app;
@@ -18,7 +18,7 @@ mod ui;
 
 use app::{ActiveScreen, App, get_default_keybindings};
 use cli::Args;
-use system::{detect_language, get_config_path, get_package_manager};
+use system::{detect_language, get_config_path, get_package_manager, command_exists};
 use translations::{Language, Translations};
 use ui::ui_draw;
 
@@ -67,13 +67,7 @@ fn main() -> io::Result<()> {
         progress += 5;
     }
 
-    let niri_check = Command::new("which")
-        .arg("niri")
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status();
-
-    let niri_installed = niri_check.map(|s| s.success()).unwrap_or(false);
+    let niri_installed = command_exists("niri");
 
     if !niri_installed {
         if let Some(pm) = get_package_manager() {
@@ -324,13 +318,7 @@ fn run_loop(
 
                                 match install_result {
                                     Ok(_) => {
-                                        let niri_check = Command::new("which")
-                                            .arg("niri")
-                                            .stdout(Stdio::null())
-                                            .stderr(Stdio::null())
-                                            .status();
-
-                                        if niri_check.map(|s| s.success()).unwrap_or(false) {
+                                        if command_exists("niri") {
                                             app.update_metadata();
                                             app.active_screen = ActiveScreen::InfoPopup(match app
                                                 .lang
