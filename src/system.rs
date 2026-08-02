@@ -153,3 +153,55 @@ pub fn validate_noctalia_config(path: &Path) -> Result<(), String> {
         )),
     }
 }
+
+/// Normalizes key combination string by sorting modifiers alphabetically.
+pub fn normalize_key(key: &str) -> String {
+    let mut parts: Vec<String> = key.split('+').map(|s| s.trim().to_string()).collect();
+    parts.sort();
+    parts.join("+")
+}
+
+/// Normalizes action text string by stripping quotes, semicolons, and collapsing spaces.
+pub fn normalize_action(action: &str) -> String {
+    let cleaned = action
+        .replace('"', "")
+        .replace(';', "")
+        .replace('\n', " ")
+        .replace('\r', "");
+    
+    // Collapse duplicate whitespaces
+    let mut result = String::new();
+    let mut last_was_space = false;
+    for c in cleaned.chars() {
+        if c.is_whitespace() {
+            if !last_was_space {
+                result.push(' ');
+                last_was_space = true;
+            }
+        } else {
+            result.push(c);
+            last_was_space = false;
+        }
+    }
+    result.trim().to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_normalize_key() {
+        assert_eq!(normalize_key("Mod+Shift+Slash"), "Mod+Shift+Slash");
+        assert_eq!(normalize_key("Shift+Mod+Slash"), "Mod+Shift+Slash");
+        assert_eq!(normalize_key("Ctrl+Alt+Mod+Space"), "Alt+Ctrl+Mod+Space");
+    }
+
+    #[test]
+    fn test_normalize_action() {
+        assert_eq!(normalize_action("spawn \"ghostty\";"), "spawn ghostty");
+        assert_eq!(normalize_action("spawn   \"ghostty\"   "), "spawn ghostty");
+        assert_eq!(normalize_action("focus-workspace-down;"), "focus-workspace-down");
+        assert_eq!(normalize_action("focus-workspace-down"), "focus-workspace-down");
+    }
+}

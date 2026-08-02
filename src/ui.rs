@@ -779,9 +779,37 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
                 Line::from(""),
             ];
 
-            for (idx, (key, action)) in missing.iter().enumerate() {
+            for (idx, (key, action, user_action)) in missing.iter().enumerate() {
                 let is_selected = idx == *selected_idx;
                 let prefix = if is_selected { "  " } else { "   " };
+
+                let (type_label, type_color) = match user_action {
+                    Some(_) => (
+                        match app.lang {
+                            Language::Es => "[CAMBIO]  ",
+                            Language::En => "[DIFF]    ",
+                        },
+                        Color::Rgb(224, 73, 172), // Magenta
+                    ),
+                    None => (
+                        match app.lang {
+                            Language::Es => "[FALTA]   ",
+                            Language::En => "[MISSING] ",
+                        },
+                        Color::Rgb(38, 166, 154), // Cyan/Teal
+                    ),
+                };
+
+                let label_span = Span::styled(
+                    type_label,
+                    if is_selected {
+                        Style::default()
+                            .fg(accent_yellow)
+                            .add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(type_color).add_modifier(Modifier::BOLD)
+                    },
+                );
 
                 let key_span = Span::styled(
                     format!("{:<20}", key),
@@ -793,6 +821,7 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
                         Style::default().fg(color_text_main)
                     },
                 );
+
                 let action_span = Span::styled(
                     action,
                     if is_selected {
@@ -810,24 +839,40 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
                     Style::default()
                 };
 
-                lines.push(
-                    Line::from(vec![
-                        Span::styled(
-                            prefix,
-                            if is_selected {
-                                Style::default()
-                                    .fg(accent_yellow)
-                                    .add_modifier(Modifier::BOLD)
-                            } else {
-                                Style::default()
-                            },
-                        ),
-                        key_span,
-                        Span::raw("   "),
-                        action_span,
-                    ])
-                    .style(style),
-                );
+                let mut line_spans = vec![
+                    Span::styled(
+                        prefix,
+                        if is_selected {
+                            Style::default()
+                                .fg(accent_yellow)
+                                .add_modifier(Modifier::BOLD)
+                        } else {
+                            Style::default()
+                        },
+                    ),
+                    label_span,
+                    key_span,
+                    Span::raw("   "),
+                    action_span,
+                ];
+
+                if let Some(actual) = user_action {
+                    let actual_label = match app.lang {
+                        Language::Es => format!(" (actual: {})", actual),
+                        Language::En => format!(" (current: {})", actual),
+                    };
+                    line_spans.push(Span::styled(
+                        actual_label,
+                        if is_selected {
+                            Style::default()
+                                .fg(accent_yellow)
+                        } else {
+                            Style::default().fg(Color::Rgb(128, 128, 128))
+                        },
+                    ));
+                }
+
+                lines.push(Line::from(line_spans).style(style));
             }
 
             lines.push(Line::from(""));

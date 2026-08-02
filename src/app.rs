@@ -1,5 +1,5 @@
 use crate::default_config;
-use crate::system::{validate_config, validate_noctalia_config};
+use crate::system::{validate_config, validate_noctalia_config, normalize_key};
 use crate::translations::{Language, Translations};
 use kdl::KdlDocument;
 use ratatui::widgets::ListState;
@@ -28,7 +28,7 @@ pub enum ActiveScreen {
     InfoPopup(String),
     CreateConfigPrompt,
     MergePopup {
-        missing: Vec<(String, String)>,
+        missing: Vec<(String, String, Option<String>)>,
         selected_idx: usize,
     },
     EditAppearancePopup {
@@ -171,6 +171,21 @@ impl App {
         }
         self.load_noctalia_config()?;
         Ok(())
+    }
+
+    /// Toggles the language of the application and refreshes language-dependent text.
+    pub fn toggle_language(&mut self) {
+        self.lang = match self.lang {
+            Language::Es => Language::En,
+            Language::En => Language::Es,
+        };
+        // Refresh Noctalia settings since descriptions depend on language
+        self.reload_noctalia_settings();
+        
+        self.log_agent_activity(match self.lang {
+            Language::Es => "Idioma cambiado a Español / Language changed to Spanish".to_string(),
+            Language::En => "Language changed to English / Idioma cambiado a Inglés".to_string(),
+        });
     }
 
     /// Loads and parses the KDL configuration file, normalizing line endings.
@@ -323,7 +338,7 @@ impl App {
             if let Some(pos) = children
                 .nodes()
                 .iter()
-                .position(|n| n.name().value() == key_to_remove)
+                .position(|n| normalize_key(n.name().value()) == normalize_key(&key_to_remove))
             {
                 children.nodes_mut().remove(pos);
             }
@@ -464,7 +479,7 @@ impl App {
         if let Some(pos) = children
             .nodes()
             .iter()
-            .position(|n| n.name().value() == key)
+            .position(|n| normalize_key(n.name().value()) == normalize_key(&key))
         {
             children.nodes_mut().remove(pos);
         }
@@ -477,7 +492,7 @@ impl App {
                     if let Some(found_node) = def_children
                         .nodes()
                         .iter()
-                        .find(|n| n.name().value() == key)
+                        .find(|n| normalize_key(n.name().value()) == normalize_key(&key))
                     {
                         node_to_add = Some(found_node.clone());
                     }
@@ -564,7 +579,7 @@ impl App {
             if let Some(pos) = children
                 .nodes()
                 .iter()
-                .position(|n| n.name().value() == key)
+                .position(|n| normalize_key(n.name().value()) == normalize_key(&key))
             {
                 children.nodes_mut().remove(pos);
             }
@@ -578,7 +593,7 @@ impl App {
                         if let Some(found_node) = def_children
                             .nodes()
                             .iter()
-                            .find(|n| n.name().value() == key)
+                            .find(|n| normalize_key(n.name().value()) == normalize_key(&key))
                         {
                             node_to_add = Some(found_node.clone());
                         }
