@@ -1,5 +1,5 @@
 use crate::default_config;
-use crate::system::validate_config;
+use crate::system::{validate_config, validate_noctalia_config};
 use crate::translations::{Language, Translations};
 use kdl::KdlDocument;
 use ratatui::widgets::ListState;
@@ -36,6 +36,20 @@ pub enum ActiveScreen {
         setting_name: String,
         input_value: String,
     },
+    EditNoctaliaPopup {
+        setting_id: String,
+        setting_name: String,
+        input_value: String,
+        value_type: NoctaliaValueType,
+    },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum NoctaliaValueType {
+    Bool,
+    Float,
+    Integer,
+    Str,
 }
 
 /// Represents a configurable layout or aesthetic setting in Niri.
@@ -44,6 +58,14 @@ pub struct AppearanceSetting {
     pub id: String,
     pub name: String,
     pub value: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct NoctaliaSettingItem {
+    pub id: String,
+    pub name: String,
+    pub value: String,
+    pub value_type: NoctaliaValueType,
 }
 
 /// Represents the current field in focus inside the Add Shortcut popup.
@@ -70,11 +92,21 @@ pub struct App {
     pub file_is_valid: bool,
     pub active_tab: usize,
     pub appearance_state: ListState,
+    pub noctalia_path: PathBuf,
+    pub noctalia_config: Option<toml::Table>,
+    pub noctalia_settings: Vec<NoctaliaSettingItem>,
+    pub noctalia_is_valid: bool,
+    pub noctalia_state: ListState,
+    pub agent_logs: Vec<String>,
+    pub preview_scroll: u16,
 }
 
 impl App {
     /// Creates a new TUI App instance with the provided config path, dry-run flag, and language.
     pub fn new(config_path: PathBuf, dry_run: bool, lang: Language) -> Self {
+        let mut noctalia_path = dirs::home_dir().unwrap_or_default();
+        noctalia_path.push(".local/state/noctalia/settings.toml");
+
         Self {
             config_path,
             dry_run,
@@ -94,20 +126,56 @@ impl App {
             file_is_valid: false,
             active_tab: 0,
             appearance_state: ListState::default(),
+            noctalia_path,
+            noctalia_config: None,
+            noctalia_settings: Vec::new(),
+            noctalia_is_valid: false,
+            noctalia_state: ListState::default(),
+            agent_logs: Vec::new(),
+            preview_scroll: 0,
+        }
+    }
+
+    /// Logs an activity event with a timestamp.
+    pub fn log_agent_activity(&mut self, message: String) {
+        let now = chrono::Local::now().format("%H:%M:%S").to_string();
+        self.agent_logs.push(format!("[{}] {}", now, message));
+        if self.agent_logs.len() > 100 {
+            self.agent_logs.remove(0);
+        }
+    }
+
+    /// Generates a live string preview of the active configuration file.
+    pub fn get_live_file_preview(&self) -> String {
+        if self.active_tab == 2 {
+            if let Some(ref config) = self.noctalia_config {
+                toml::to_string(config).unwrap_or_default()
+            } else {
+                String::new()
+            }
+        } else {
+            if let Some(ref doc) = self.doc {
+                doc.to_string()
+            } else {
+                String::new()
+            }
         }
     }
 
     /// Initializes the App state, loading the KDL document if the file exists.
     pub fn init(&mut self) -> Result<(), String> {
+        self.log_agent_activity("Inicializando NiriKeys / Initializing NiriKeys...".to_string());
         if self.config_path.exists() {
             self.load_doc()?;
             self.update_metadata();
         }
+        self.load_noctalia_config()?;
         Ok(())
     }
 
     /// Loads and parses the KDL configuration file, normalizing line endings.
     pub fn load_doc(&mut self) -> Result<(), String> {
+        self.log_agent_activity(format!("Cargando Niri KDL / Loading Niri KDL from: {}", self.config_path.display()));
         let raw_content = fs::read_to_string(&self.config_path).map_err(|e| match self.lang {
             Language::Es => format!("Error al leer archivo: {}", e),
             Language::En => format!("Error reading file: {}", e),
@@ -239,6 +307,7 @@ impl App {
 
         let (key, _) = &self.keybindings[selected];
         let key_to_remove = key.clone();
+        self.log_agent_activity(format!("Eliminando atajo / Deleting keybinding: {}", key_to_remove));
 
         let doc = match self.doc.as_mut() {
             Some(d) => d,
@@ -273,6 +342,7 @@ impl App {
 
     /// Creates a backup copy of the configuration file on disk.
     pub fn trigger_backup(&mut self) {
+        self.log_agent_activity("Creando copia de seguridad / Creating backup copy...".to_string());
         if !self.config_path.exists() {
             self.active_screen = ActiveScreen::ErrorPopup(match self.lang {
                 Language::Es => "No existe archivo de configuración".to_string(),
@@ -290,6 +360,7 @@ impl App {
 
         match fs::copy(&self.config_path, &backup_path) {
             Ok(_) => {
+                self.log_agent_activity(format!("Copia de seguridad creada con éxito / Backup created successfully at: {}", backup_path.display()));
                 self.active_screen = ActiveScreen::InfoPopup(format!(
                     "{}",
                     Translations::get(&self.lang)
@@ -369,6 +440,7 @@ impl App {
 
     /// Applies a keybinding to the configuration, looking it up in the template if possible.
     pub fn apply_keybinding(&mut self, key: String, action: String) {
+        self.log_agent_activity(format!("Aplicando atajo / Applying keybinding: {} -> {}", key, action));
         let doc = match self.doc.as_mut() {
             Some(d) => d,
             Option::None => return,
@@ -558,6 +630,7 @@ impl App {
 
     /// Saves the current configuration to disk and validates it using Niri.
     pub fn save_and_validate_changes(&mut self) -> Result<(), String> {
+        self.log_agent_activity("Validando cambios en Niri config / Validating Niri config changes...".to_string());
         let doc = self.doc.as_mut().ok_or_else(|| match self.lang {
             Language::Es => "No hay ningún documento cargado".to_string(),
             Language::En => "No document loaded".to_string(),
@@ -566,6 +639,7 @@ impl App {
         let serialized = doc.to_string();
 
         if self.dry_run {
+            self.log_agent_activity("Simulación activa (dry-run). No se escriben cambios en disco. / Dry-run active. No changes written.".to_string());
             self.reload_keybindings()?;
             self.update_metadata();
             return Ok(());
@@ -592,6 +666,7 @@ impl App {
 
         match validate_config(temp_file.path()) {
             Ok(_) => {
+                self.log_agent_activity("Validación de Niri exitosa. Persistiendo cambios / Niri validation OK. Persisting changes...".to_string());
                 temp_file
                     .persist(&self.config_path)
                     .map_err(|e| match self.lang {
@@ -604,6 +679,7 @@ impl App {
                 Ok(())
             }
             Err(err_msg) => {
+                self.log_agent_activity(format!("¡ERROR de validación de Niri! / Niri validation ERROR: {}", err_msg));
                 let _ = self.load_doc();
                 Err(err_msg)
             }
@@ -836,6 +912,7 @@ impl App {
 
     /// Updates the specified appearance option to a new value in the config file.
     pub fn update_appearance_setting(&mut self, id: &str, value: String) -> Result<(), String> {
+        self.log_agent_activity(format!("Modificando apariencia / Modifying appearance: {} -> {}", id, value));
         let doc = match self.doc.as_mut() {
             Some(d) => d,
             Option::None => return Err("KDL document not loaded".to_string()),
@@ -1061,6 +1138,553 @@ impl App {
         if let Some(children) = node.children_mut() {
             Self::fix_trailing_comments(children);
         }
+    }
+
+    /// Loads and parses the Noctalia TOML configuration file if it exists.
+    pub fn load_noctalia_config(&mut self) -> Result<(), String> {
+        if self.noctalia_path.exists() {
+            self.log_agent_activity(format!("Cargando Noctalia TOML / Loading Noctalia TOML from: {}", self.noctalia_path.display()));
+            let content = fs::read_to_string(&self.noctalia_path).map_err(|e| match self.lang {
+                Language::Es => format!("Error al leer configuración de Noctalia: {}", e),
+                Language::En => format!("Error reading Noctalia configuration: {}", e),
+            })?;
+            
+            let config: toml::Table = toml::from_str(&content).map_err(|e| match self.lang {
+                Language::Es => format!("Error al parsear TOML de Noctalia: {}", e),
+                Language::En => format!("Error parsing Noctalia TOML: {}", e),
+            })?;
+            
+            self.noctalia_config = Some(config);
+            self.noctalia_is_valid = true;
+            self.reload_noctalia_settings();
+        } else {
+            self.noctalia_config = None;
+            self.noctalia_is_valid = false;
+            self.noctalia_settings.clear();
+        }
+        Ok(())
+    }
+
+    /// Saves the current Noctalia TOML configuration back to the disk.
+    pub fn save_noctalia_config(&mut self) -> Result<(), String> {
+        self.log_agent_activity("Validando cambios de Noctalia / Validating Noctalia changes...".to_string());
+        if self.dry_run {
+            self.log_agent_activity("Simulación activa (dry-run). No se guardan cambios de Noctalia. / Dry-run active. Noctalia changes not saved.".to_string());
+            return Ok(());
+        }
+        if let Some(ref config) = self.noctalia_config {
+            let content = toml::to_string(config).map_err(|e| match self.lang {
+                Language::Es => format!("Error al serializar TOML de Noctalia: {}", e),
+                Language::En => format!("Error serializing Noctalia TOML: {}", e),
+            })?;
+            
+            let parent = self.noctalia_path.parent().unwrap_or_else(|| Path::new("."));
+            fs::create_dir_all(parent).map_err(|e| match self.lang {
+                Language::Es => format!("Error al crear directorio para Noctalia: {}", e),
+                Language::En => format!("Error creating Noctalia directory: {}", e),
+            })?;
+            
+            let mut temp_file = NamedTempFile::new_in(parent).map_err(|e| match self.lang {
+                Language::Es => format!("No se pudo crear archivo temporal: {}", e),
+                Language::En => format!("Could not create temporary file: {}", e),
+            })?;
+            
+            use std::io::Write;
+            temp_file
+                .write_all(content.as_bytes())
+                .map_err(|e| match self.lang {
+                    Language::Es => format!("Error al escribir archivo temporal: {}", e),
+                    Language::En => format!("Error writing temporary file: {}", e),
+                })?;
+                
+            match validate_noctalia_config(temp_file.path()) {
+                Ok(_) => {
+                    self.log_agent_activity("Validación de Noctalia exitosa. Guardando cambios... / Noctalia validation OK. Saving changes...".to_string());
+                    temp_file
+                        .persist(&self.noctalia_path)
+                        .map_err(|e| match self.lang {
+                            Language::Es => format!("Error al guardar el archivo definitivo de Noctalia: {}", e),
+                            Language::En => format!("Error saving final Noctalia configuration file: {}", e),
+                        })?;
+                    
+                    // Trigger hot-reload in Noctalia
+                    self.log_agent_activity("Enviando señal de recarga / Sending config hot-reload command: 'noctalia msg config-reload'".to_string());
+                    let reload_output = std::process::Command::new("noctalia")
+                        .arg("msg")
+                        .arg("config-reload")
+                        .output();
+                    match reload_output {
+                        Ok(out) => {
+                            if out.status.success() {
+                                self.log_agent_activity("¡Recarga de Noctalia exitosa! / Noctalia hot-reload successful!".to_string());
+                            } else {
+                                let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
+                                self.log_agent_activity(format!("Error en comando de recarga / Hot-reload failed: {}", err));
+                            }
+                        }
+                        Err(e) => {
+                            self.log_agent_activity(format!("No se pudo ejecutar comando de recarga / Failed to run hot-reload command: {}", e));
+                        }
+                    }
+                    Ok(())
+                }
+                Err(validation_error) => {
+                    self.log_agent_activity(format!("¡ERROR de validación de Noctalia! / Noctalia validation ERROR: {}", validation_error));
+                    Err(validation_error)
+                }
+            }
+        } else {
+            Ok(())
+        }
+    }
+      /// Refreshes the list of Noctalia UI settings exposed in the TUI menu.
+    pub fn reload_noctalia_settings(&mut self) {
+        let mut settings = Vec::new();
+        let config = match &self.noctalia_config {
+            Some(c) => c,
+            _ => {
+                self.noctalia_settings.clear();
+                return;
+            }
+        };
+
+        let get_val = |path: &str| -> Option<toml::Value> {
+            let mut current = toml::Value::Table(config.clone());
+            for key in path.split('.') {
+                current = current.get(key)?.clone();
+            }
+            Some(current)
+        };
+
+        let get_bool = |path: &str| -> String {
+            get_val(path)
+                .and_then(|v| v.as_bool())
+                .map(|b| b.to_string())
+                .unwrap_or_else(|| "Default".to_string())
+        };
+
+        let get_float = |path: &str| -> String {
+            get_val(path)
+                .and_then(|v| v.as_float())
+                .map(|f| format!("{:.2}", f))
+                .unwrap_or_else(|| "Default".to_string())
+        };
+
+        let get_int = |path: &str| -> String {
+            get_val(path)
+                .and_then(|v| v.as_integer())
+                .map(|i| i.to_string())
+                .unwrap_or_else(|| "Default".to_string())
+        };
+
+        let get_str = |path: &str| -> String {
+            get_val(path)
+                .and_then(|v| v.as_str().map(|s| s.to_string()))
+                .unwrap_or_else(|| "Default".to_string())
+        };
+
+        // --- BACKDROP ---
+        settings.push(NoctaliaSettingItem {
+            id: "backdrop.enabled".to_string(),
+            name: match self.lang {
+                Language::Es => "Fondo: Difuminado de fondo (on/off)".to_string(),
+                Language::En => "Backdrop: Blurred Wallpaper (on/off)".to_string(),
+            },
+            value: get_bool("backdrop.enabled"),
+            value_type: NoctaliaValueType::Bool,
+        });
+
+        settings.push(NoctaliaSettingItem {
+            id: "backdrop.blur_intensity".to_string(),
+            name: match self.lang {
+                Language::Es => "Fondo: Intensidad de desenfoque".to_string(),
+                Language::En => "Backdrop: Blur Intensity (0.0 - 1.0)".to_string(),
+            },
+            value: get_float("backdrop.blur_intensity"),
+            value_type: NoctaliaValueType::Float,
+        });
+
+        settings.push(NoctaliaSettingItem {
+            id: "backdrop.tint_intensity".to_string(),
+            name: match self.lang {
+                Language::Es => "Fondo: Intensidad de tinte".to_string(),
+                Language::En => "Backdrop: Tint Intensity (0.0 - 1.0)".to_string(),
+            },
+            value: get_float("backdrop.tint_intensity"),
+            value_type: NoctaliaValueType::Float,
+        });
+
+        // --- SHELL GENERAL ---
+        settings.push(NoctaliaSettingItem {
+            id: "shell.niri_overview_type_to_launch_enabled".to_string(),
+            name: match self.lang {
+                Language::Es => "Overview: Escribir para lanzar (on/off)".to_string(),
+                Language::En => "Overview: Type to Launch (on/off)".to_string(),
+            },
+            value: get_bool("shell.niri_overview_type_to_launch_enabled"),
+            value_type: NoctaliaValueType::Bool,
+        });
+
+        settings.push(NoctaliaSettingItem {
+            id: "shell.corner_radius_scale".to_string(),
+            name: match self.lang {
+                Language::Es => "Bordes: Escala de radio de esquina".to_string(),
+                Language::En => "Borders: Corner Radius Scale".to_string(),
+            },
+            value: get_float("shell.corner_radius_scale"),
+            value_type: NoctaliaValueType::Float,
+        });
+
+        settings.push(NoctaliaSettingItem {
+            id: "shell.button_borders".to_string(),
+            name: match self.lang {
+                Language::Es => "Bordes: Bordes de botones (on/off)".to_string(),
+                Language::En => "Borders: Button Borders (on/off)".to_string(),
+            },
+            value: get_bool("shell.button_borders"),
+            value_type: NoctaliaValueType::Bool,
+        });
+
+        settings.push(NoctaliaSettingItem {
+            id: "shell.input_borders".to_string(),
+            name: match self.lang {
+                Language::Es => "Bordes: Bordes de entradas (on/off)".to_string(),
+                Language::En => "Borders: Input Borders (on/off)".to_string(),
+            },
+            value: get_bool("shell.input_borders"),
+            value_type: NoctaliaValueType::Bool,
+        });
+
+        settings.push(NoctaliaSettingItem {
+            id: "shell.popup_borders".to_string(),
+            name: match self.lang {
+                Language::Es => "Bordes: Bordes de menús popup (on/off)".to_string(),
+                Language::En => "Borders: Popup Borders (on/off)".to_string(),
+            },
+            value: get_bool("shell.popup_borders"),
+            value_type: NoctaliaValueType::Bool,
+        });
+
+        settings.push(NoctaliaSettingItem {
+            id: "shell.card_borders".to_string(),
+            name: match self.lang {
+                Language::Es => "Bordes: Bordes de tarjetas/secciones (on/off)".to_string(),
+                Language::En => "Borders: Card Borders (on/off)".to_string(),
+            },
+            value: get_bool("shell.card_borders"),
+            value_type: NoctaliaValueType::Bool,
+        });
+
+        settings.push(NoctaliaSettingItem {
+            id: "shell.popup_shadows".to_string(),
+            name: match self.lang {
+                Language::Es => "Sombras: Sombras en popups (on/off)".to_string(),
+                Language::En => "Shadows: Popup Shadows (on/off)".to_string(),
+            },
+            value: get_bool("shell.popup_shadows"),
+            value_type: NoctaliaValueType::Bool,
+        });
+
+        settings.push(NoctaliaSettingItem {
+            id: "shell.font_family".to_string(),
+            name: match self.lang {
+                Language::Es => "Fuente: Familia tipográfica principal".to_string(),
+                Language::En => "Font: Primary Family".to_string(),
+            },
+            value: get_str("shell.font_family"),
+            value_type: NoctaliaValueType::Str,
+        });
+
+        settings.push(NoctaliaSettingItem {
+            id: "shell.offline_mode".to_string(),
+            name: match self.lang {
+                Language::Es => "Red: Modo Fuera de Línea (on/off)".to_string(),
+                Language::En => "Network: Offline Mode (on/off)".to_string(),
+            },
+            value: get_bool("shell.offline_mode"),
+            value_type: NoctaliaValueType::Bool,
+        });
+
+        // --- ANIMATIONS ---
+        settings.push(NoctaliaSettingItem {
+            id: "shell.animation.enabled".to_string(),
+            name: match self.lang {
+                Language::Es => "Animación: Habilitar transiciones (on/off)".to_string(),
+                Language::En => "Animation: Enable transitions (on/off)".to_string(),
+            },
+            value: get_bool("shell.animation.enabled"),
+            value_type: NoctaliaValueType::Bool,
+        });
+
+        settings.push(NoctaliaSettingItem {
+            id: "shell.animation.speed".to_string(),
+            name: match self.lang {
+                Language::Es => "Animación: Multiplicador de velocidad".to_string(),
+                Language::En => "Animation: Speed Multiplier".to_string(),
+            },
+            value: get_float("shell.animation.speed"),
+            value_type: NoctaliaValueType::Float,
+        });
+
+        // --- DOCK ---
+        settings.push(NoctaliaSettingItem {
+            id: "dock.enabled".to_string(),
+            name: match self.lang {
+                Language::Es => "Dock: Mostrar Dock (on/off)".to_string(),
+                Language::En => "Dock: Show Dock (on/off)".to_string(),
+            },
+            value: get_bool("dock.enabled"),
+            value_type: NoctaliaValueType::Bool,
+        });
+
+        settings.push(NoctaliaSettingItem {
+            id: "dock.position".to_string(),
+            name: match self.lang {
+                Language::Es => "Dock: Posición (left/right/top/bottom)".to_string(),
+                Language::En => "Dock: Position (left/right/top/bottom)".to_string(),
+            },
+            value: get_str("dock.position"),
+            value_type: NoctaliaValueType::Str,
+        });
+
+        settings.push(NoctaliaSettingItem {
+            id: "dock.icon_size".to_string(),
+            name: match self.lang {
+                Language::Es => "Dock: Tamaño de iconos (píxeles)".to_string(),
+                Language::En => "Dock: Icon Size (pixels)".to_string(),
+            },
+            value: get_int("dock.icon_size"),
+            value_type: NoctaliaValueType::Integer,
+        });
+
+        settings.push(NoctaliaSettingItem {
+            id: "dock.background_opacity".to_string(),
+            name: match self.lang {
+                Language::Es => "Dock: Opacidad de fondo".to_string(),
+                Language::En => "Dock: Background Opacity (0.0 - 1.0)".to_string(),
+            },
+            value: get_float("dock.background_opacity"),
+            value_type: NoctaliaValueType::Float,
+        });
+
+        // --- THEME ---
+        settings.push(NoctaliaSettingItem {
+            id: "theme.mode".to_string(),
+            name: match self.lang {
+                Language::Es => "Tema: Modo (dark/light/auto)".to_string(),
+                Language::En => "Theme: Mode (dark/light/auto)".to_string(),
+            },
+            value: get_str("theme.mode"),
+            value_type: NoctaliaValueType::Str,
+        });
+
+        // --- ACCESSIBILITY ---
+        settings.push(NoctaliaSettingItem {
+            id: "accessibility.ui_scale".to_string(),
+            name: match self.lang {
+                Language::Es => "Accesibilidad: Escala global de la UI".to_string(),
+                Language::En => "Accessibility: UI Scale".to_string(),
+            },
+            value: get_float("accessibility.ui_scale"),
+            value_type: NoctaliaValueType::Float,
+        });
+
+        settings.push(NoctaliaSettingItem {
+            id: "accessibility.high_contrast".to_string(),
+            name: match self.lang {
+                Language::Es => "Accesibilidad: Alto contraste (on/off)".to_string(),
+                Language::En => "Accessibility: High Contrast (on/off)".to_string(),
+            },
+            value: get_bool("accessibility.high_contrast"),
+            value_type: NoctaliaValueType::Bool,
+        });
+
+        // --- OSD ---
+        settings.push(NoctaliaSettingItem {
+            id: "osd.border".to_string(),
+            name: match self.lang {
+                Language::Es => "OSD: Bordes de popups (on/off)".to_string(),
+                Language::En => "OSD: Outline on cards (on/off)".to_string(),
+            },
+            value: get_bool("osd.border"),
+            value_type: NoctaliaValueType::Bool,
+        });
+
+        settings.push(NoctaliaSettingItem {
+            id: "osd.scale".to_string(),
+            name: match self.lang {
+                Language::Es => "OSD: Multiplicador de escala de OSD".to_string(),
+                Language::En => "OSD: Scale multiplier".to_string(),
+            },
+            value: get_float("osd.scale"),
+            value_type: NoctaliaValueType::Float,
+        });
+
+        // --- LOCKSCREEN ---
+        settings.push(NoctaliaSettingItem {
+            id: "lockscreen.enabled".to_string(),
+            name: match self.lang {
+                Language::Es => "Bloqueo: Habilitar pantalla de bloqueo (on/off)".to_string(),
+                Language::En => "Lockscreen: Enable session lock (on/off)".to_string(),
+            },
+            value: get_bool("lockscreen.enabled"),
+            value_type: NoctaliaValueType::Bool,
+        });
+
+        settings.push(NoctaliaSettingItem {
+            id: "lockscreen.fingerprint".to_string(),
+            name: match self.lang {
+                Language::Es => "Bloqueo: Permitir huella dactilar (on/off)".to_string(),
+                Language::En => "Lockscreen: Allow fingerprint auth (on/off)".to_string(),
+            },
+            value: get_bool("lockscreen.fingerprint"),
+            value_type: NoctaliaValueType::Bool,
+        });
+
+        settings.push(NoctaliaSettingItem {
+            id: "lockscreen.blurred_desktop".to_string(),
+            name: match self.lang {
+                Language::Es => "Bloqueo: Fondo de pantalla capturado (on/off)".to_string(),
+                Language::En => "Lockscreen: Blurred desktop capture (on/off)".to_string(),
+            },
+            value: get_bool("lockscreen.blurred_desktop"),
+            value_type: NoctaliaValueType::Bool,
+        });
+
+        settings.push(NoctaliaSettingItem {
+            id: "lockscreen.blur_intensity".to_string(),
+            name: match self.lang {
+                Language::Es => "Bloqueo: Intensidad de desenfoque de fondo".to_string(),
+                Language::En => "Lockscreen: Blur Intensity (0.0 - 1.0)".to_string(),
+            },
+            value: get_float("lockscreen.blur_intensity"),
+            value_type: NoctaliaValueType::Float,
+        });
+
+        settings.push(NoctaliaSettingItem {
+            id: "lockscreen.tint_intensity".to_string(),
+            name: match self.lang {
+                Language::Es => "Bloqueo: Intensidad de tinte sobre fondo".to_string(),
+                Language::En => "Lockscreen: Tint Intensity (0.0 - 1.0)".to_string(),
+            },
+            value: get_float("lockscreen.tint_intensity"),
+            value_type: NoctaliaValueType::Float,
+        });
+
+        self.noctalia_settings = settings;
+
+        let len = self.noctalia_settings.len();
+        if len == 0 {
+            self.noctalia_state.select(None);
+        } else {
+            let curr = self.noctalia_state.selected().unwrap_or(0);
+            if curr >= len {
+                self.noctalia_state.select(Some(len - 1));
+            } else {
+                self.noctalia_state.select(Some(curr));
+            }
+        }
+    }
+
+    /// Updates a specific Noctalia setting value and saves the configuration.
+    pub fn update_noctalia_setting(&mut self, id: &str, value: String) -> Result<(), String> {
+        self.log_agent_activity(format!("Modificando ajuste de Noctalia / Modifying Noctalia setting: {} -> {}", id, value));
+        let config = match self.noctalia_config.as_mut() {
+            Some(c) => c,
+            _ => return Err(match self.lang {
+                Language::Es => "Configuración de Noctalia no cargada".to_string(),
+                Language::En => "Noctalia configuration not loaded".to_string(),
+            }),
+        };
+
+        let mut update_path = |path: &str, val: toml::Value| {
+            let parts: Vec<&str> = path.split('.').collect();
+            match parts.len() {
+                1 => {
+                    config.insert(parts[0].to_string(), val);
+                }
+                2 => {
+                    let sec = parts[0];
+                    let key = parts[1];
+                    if let Some(sec_val) = config.get_mut(sec) {
+                        if let Some(sec_table) = sec_val.as_table_mut() {
+                            sec_table.insert(key.to_string(), val);
+                        }
+                    } else {
+                        let mut sec_table = toml::Table::new();
+                        sec_table.insert(key.to_string(), val);
+                        config.insert(sec.to_string(), toml::Value::Table(sec_table));
+                    }
+                }
+                3 => {
+                    let sec1 = parts[0];
+                    let sec2 = parts[1];
+                    let key = parts[2];
+                    
+                    if !config.contains_key(sec1) {
+                        config.insert(sec1.to_string(), toml::Value::Table(toml::Table::new()));
+                    }
+                    if let Some(t1) = config.get_mut(sec1).and_then(|v| v.as_table_mut()) {
+                        if !t1.contains_key(sec2) {
+                            t1.insert(sec2.to_string(), toml::Value::Table(toml::Table::new()));
+                        }
+                        if let Some(t2) = t1.get_mut(sec2).and_then(|v| v.as_table_mut()) {
+                            t2.insert(key.to_string(), val);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        };
+
+        let setting_item = self.noctalia_settings.iter().find(|s| s.id == id).ok_or_else(|| match self.lang {
+            Language::Es => "Ajuste no reconocido".to_string(),
+            Language::En => "Unrecognized setting".to_string(),
+        })?;
+
+        match setting_item.value_type {
+            NoctaliaValueType::Bool => {
+                let parsed: bool = value.trim().parse().map_err(|_| match self.lang {
+                    Language::Es => "Valor inválido: debe ser 'true' o 'false'".to_string(),
+                    Language::En => "Invalid value: must be 'true' or 'false'".to_string(),
+                })?;
+                update_path(id, toml::Value::Boolean(parsed));
+            }
+            NoctaliaValueType::Float => {
+                let parsed: f64 = value.trim().parse().map_err(|_| match self.lang {
+                    Language::Es => "Valor inválido: debe ser un número decimal".to_string(),
+                    Language::En => "Invalid value: must be a decimal number".to_string(),
+                })?;
+                update_path(id, toml::Value::Float(parsed));
+            }
+            NoctaliaValueType::Integer => {
+                let parsed: i64 = value.trim().parse().map_err(|_| match self.lang {
+                    Language::Es => "Valor inválido: debe ser un número entero".to_string(),
+                    Language::En => "Invalid value: must be an integer number".to_string(),
+                })?;
+                update_path(id, toml::Value::Integer(parsed));
+            }
+            NoctaliaValueType::Str => {
+                let val_str = value.trim().to_string();
+                if id == "dock.position" && val_str != "left" && val_str != "right" && val_str != "top" && val_str != "bottom" {
+                    return Err(match self.lang {
+                        Language::Es => "Valor inválido: debe ser 'left', 'right', 'top' o 'bottom'".to_string(),
+                        Language::En => "Invalid value: must be 'left', 'right', 'top' or 'bottom'".to_string(),
+                    });
+                }
+                if id == "theme.mode" && val_str != "dark" && val_str != "light" && val_str != "auto" {
+                    return Err(match self.lang {
+                        Language::Es => "Valor inválido: debe ser 'dark', 'light' o 'auto'".to_string(),
+                        Language::En => "Invalid value: must be 'dark', 'light' or 'auto'".to_string(),
+                    });
+                }
+                update_path(id, toml::Value::String(val_str));
+            }
+        }
+
+        self.save_noctalia_config()?;
+        self.reload_noctalia_settings();
+        Ok(())
     }
 }
 

@@ -6,7 +6,7 @@ use crossterm::{
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
 use std::io;
-use std::process::{Command, Stdio};
+use std::process::Command;
 use std::time::Duration;
 
 mod app;
@@ -18,7 +18,7 @@ mod ui;
 
 use app::{ActiveScreen, App, get_default_keybindings};
 use cli::Args;
-use system::{detect_language, get_config_path, get_package_manager};
+use system::{detect_language, get_config_path, get_package_manager, command_exists};
 use translations::{Language, Translations};
 use ui::ui_draw;
 
@@ -67,13 +67,7 @@ fn main() -> io::Result<()> {
         progress += 5;
     }
 
-    let niri_check = Command::new("which")
-        .arg("niri")
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status();
-
-    let niri_installed = niri_check.map(|s| s.success()).unwrap_or(false);
+    let niri_installed = command_exists("niri");
 
     if !niri_installed {
         if let Some(pm) = get_package_manager() {
@@ -131,10 +125,17 @@ fn run_loop(
                             KeyCode::Char('q') | KeyCode::Esc => break,
                             KeyCode::Char('1') => app.active_tab = 0,
                             KeyCode::Char('2') => app.active_tab = 1,
+                            KeyCode::Char('3') => app.active_tab = 2,
+                            KeyCode::Char('[') => {
+                                app.preview_scroll = app.preview_scroll.saturating_sub(1);
+                            }
+                            KeyCode::Char(']') => {
+                                app.preview_scroll = app.preview_scroll.saturating_add(1);
+                            }
                             KeyCode::Up | KeyCode::Char('k') => {
                                 if app.active_tab == 0 {
                                     app.move_selection_up();
-                                } else {
+                                } else if app.active_tab == 1 {
                                     let current = app.appearance_state.selected().unwrap_or(0);
                                     let settings_len = app.get_appearance_settings().len();
                                     if settings_len > 0 {
@@ -145,12 +146,23 @@ fn run_loop(
                                         };
                                         app.appearance_state.select(Some(next));
                                     }
+                                } else {
+                                    let current = app.noctalia_state.selected().unwrap_or(0);
+                                    let settings_len = app.noctalia_settings.len();
+                                    if settings_len > 0 {
+                                        let next = if current == 0 {
+                                            settings_len - 1
+                                        } else {
+                                            current - 1
+                                        };
+                                        app.noctalia_state.select(Some(next));
+                                    }
                                 }
                             }
                             KeyCode::Down | KeyCode::Char('j') => {
                                 if app.active_tab == 0 {
                                     app.move_selection_down();
-                                } else {
+                                } else if app.active_tab == 1 {
                                     let current = app.appearance_state.selected().unwrap_or(0);
                                     let settings_len = app.get_appearance_settings().len();
                                     if settings_len > 0 {
@@ -160,6 +172,17 @@ fn run_loop(
                                             current + 1
                                         };
                                         app.appearance_state.select(Some(next));
+                                    }
+                                } else {
+                                    let current = app.noctalia_state.selected().unwrap_or(0);
+                                    let settings_len = app.noctalia_settings.len();
+                                    if settings_len > 0 {
+                                        let next = if current >= settings_len - 1 {
+                                            0
+                                        } else {
+                                            current + 1
+                                        };
+                                        app.noctalia_state.select(Some(next));
                                     }
                                 }
                             }
@@ -216,6 +239,22 @@ fn run_loop(
                                                 } else {
                                                     setting.value.clone()
                                                 },
+                                            };
+                                        }
+                                    }
+                                } else if app.active_tab == 2 {
+                                    if let Some(selected_idx) = app.noctalia_state.selected() {
+                                        if selected_idx < app.noctalia_settings.len() {
+                                            let setting = &app.noctalia_settings[selected_idx];
+                                            app.active_screen = ActiveScreen::EditNoctaliaPopup {
+                                                setting_id: setting.id.clone(),
+                                                setting_name: setting.name.clone(),
+                                                input_value: if setting.value == "Default" {
+                                                    String::new()
+                                                } else {
+                                                    setting.value.clone()
+                                                },
+                                                value_type: setting.value_type,
                                             };
                                         }
                                     }
@@ -279,13 +318,7 @@ fn run_loop(
 
                                 match install_result {
                                     Ok(_) => {
-                                        let niri_check = Command::new("which")
-                                            .arg("niri")
-                                            .stdout(Stdio::null())
-                                            .stderr(Stdio::null())
-                                            .status();
-
-                                        if niri_check.map(|s| s.success()).unwrap_or(false) {
+                                        if command_exists("niri") {
                                             app.update_metadata();
                                             app.active_screen = ActiveScreen::InfoPopup(match app
                                                 .lang
@@ -467,6 +500,51 @@ fn run_loop(
                                         app.active_screen = ActiveScreen::InfoPopup(
                                             Translations::get(&app.lang)
                                                 .msg_appearance_success
+                                                .to_string(),
+                                        );
+                                    }
+                                    Err(e) => {
+                                        app.active_screen = ActiveScreen::ErrorPopup(e);
+                                    }
+                                }
+                            }
+                            _ => {}
+                        },
+                        ActiveScreen::EditNoctaliaPopup {
+                            setting_id,
+                            setting_name,
+                            input_value,
+                            value_type,
+                        } => match key.code {
+                            KeyCode::Esc => app.active_screen = ActiveScreen::Dashboard,
+                            KeyCode::Backspace => {
+                                let mut val = input_value.clone();
+                                val.pop();
+                                app.active_screen = ActiveScreen::EditNoctaliaPopup {
+                                    setting_id: setting_id.clone(),
+                                    setting_name: setting_name.clone(),
+                                    input_value: val,
+                                    value_type: *value_type,
+                                };
+                            }
+                            KeyCode::Char(c) => {
+                                let mut val = input_value.clone();
+                                val.push(c);
+                                app.active_screen = ActiveScreen::EditNoctaliaPopup {
+                                    setting_id: setting_id.clone(),
+                                    setting_name: setting_name.clone(),
+                                    input_value: val,
+                                    value_type: *value_type,
+                                };
+                            }
+                            KeyCode::Enter => {
+                                let sid = setting_id.clone();
+                                let val = input_value.trim().to_string();
+                                match app.update_noctalia_setting(&sid, val) {
+                                    Ok(_) => {
+                                        app.active_screen = ActiveScreen::InfoPopup(
+                                            Translations::get(&app.lang)
+                                                .msg_noctalia_success
                                                 .to_string(),
                                         );
                                     }

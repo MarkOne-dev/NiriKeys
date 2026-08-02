@@ -12,6 +12,26 @@ use ratatui::{
 pub fn ui_draw(frame: &mut Frame, app: &mut App) {
     let size = frame.area();
 
+    // Color Palette Constants
+    let bg_main = Color::Rgb(15, 14, 29);         // #0f0e1d
+    let bg_sidebar = Color::Rgb(21, 20, 43);      // #15142b
+    let accent_yellow = Color::Rgb(245, 224, 107); // #f5e06b
+    let color_border = Color::Rgb(42, 39, 74);    // #2a274a
+    let color_text_main = Color::White;           // #ffffff
+    let color_text_sec = Color::Rgb(176, 174, 196); // #b0aec4
+
+    // Render overall main background
+    frame.render_widget(Block::new().bg(bg_main), size);
+    
+    let get_display_path = |path: &std::path::Path| -> String {
+        if let Some(home) = dirs::home_dir() {
+            if let Ok(stripped) = path.strip_prefix(&home) {
+                return format!("~/{}", stripped.display());
+            }
+        }
+        path.to_string_lossy().into_owned()
+    };
+
     if let ActiveScreen::Loading {
         progress,
         status_msg,
@@ -73,33 +93,39 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
         Span::styled(
             Translations::get(&app.lang).title,
             Style::default()
-                .fg(Color::Magenta)
+                .fg(accent_yellow)
                 .add_modifier(Modifier::BOLD),
         ),
         Span::styled(
             Translations::get(&app.lang).subtitle,
-            Style::default().fg(Color::Cyan),
+            Style::default().fg(color_text_sec),
         ),
         if app.dry_run {
             Span::styled(
                 Translations::get(&app.lang).dry_run,
                 Style::default()
-                    .fg(Color::Yellow)
+                    .fg(accent_yellow)
                     .add_modifier(Modifier::BOLD),
             )
         } else {
             Span::raw("")
         },
     ])])
-    .block(Block::bordered().border_style(Style::default().fg(Color::Magenta)));
+    .block(
+        Block::bordered()
+            .border_style(Style::default().fg(color_border))
+            .bg(bg_sidebar),
+    );
     frame.render_widget(header_widget, chunks[0]);
 
     let help_text = match app.active_screen {
         ActiveScreen::Dashboard => {
             if app.active_tab == 0 {
                 Translations::get(&app.lang).help_dashboard
-            } else {
+            } else if app.active_tab == 1 {
                 Translations::get(&app.lang).help_appearance
+            } else {
+                Translations::get(&app.lang).help_noctalia
             }
         }
         ActiveScreen::CreateConfigPrompt => Translations::get(&app.lang).help_create_config,
@@ -113,12 +139,15 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
         ActiveScreen::EditAppearancePopup { .. } => {
             Translations::get(&app.lang).modal_appearance_guide
         }
+        ActiveScreen::EditNoctaliaPopup { .. } => {
+            Translations::get(&app.lang).modal_appearance_guide
+        }
         ActiveScreen::Loading { .. } => "",
     };
     let footer_widget = Paragraph::new(help_text).style(
         Style::default()
-            .bg(Color::Magenta)
-            .fg(Color::White)
+            .bg(bg_sidebar)
+            .fg(color_text_sec)
             .add_modifier(Modifier::BOLD),
     );
     frame.render_widget(footer_widget, chunks[2]);
@@ -131,6 +160,7 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
     let tab_titles = vec![
         Translations::get(&app.lang).tab_shortcuts,
         Translations::get(&app.lang).tab_appearance,
+        Translations::get(&app.lang).tab_noctalia,
     ];
     let tab_spans = tab_titles
         .iter()
@@ -140,12 +170,12 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
                 Span::styled(
                     format!(" {} ", title),
                     Style::default()
-                        .fg(Color::Black)
-                        .bg(Color::Cyan)
+                        .fg(bg_main)
+                        .bg(accent_yellow)
                         .add_modifier(Modifier::BOLD),
                 )
             } else {
-                Span::styled(format!(" {} ", title), Style::default().fg(Color::Gray))
+                Span::styled(format!(" {} ", title), Style::default().fg(color_text_sec))
             }
         })
         .collect::<Vec<_>>();
@@ -160,91 +190,206 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
 
     let tabs_widget = Paragraph::new(Line::from(tab_line)).block(
         Block::bordered()
-            .title(" Menú ")
-            .border_style(Style::default().fg(Color::DarkGray)),
+            .title(Span::styled(" Menú ", Style::default().fg(color_text_main)))
+            .border_style(Style::default().fg(color_border))
+            .bg(bg_sidebar),
     );
     frame.render_widget(tabs_widget, dashboard_chunks[0]);
 
-    let main_layout = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(35), Constraint::Percentage(65)])
+    let main_vertical_chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
         .split(dashboard_chunks[1]);
 
-    let left_chunks = Layout::default()
+    let upper_layout = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(35), Constraint::Percentage(65)])
+        .split(main_vertical_chunks[0]);
+
+    let left_upper_chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(9), Constraint::Min(4)])
-        .split(main_layout[0]);
+        .constraints([Constraint::Length(7), Constraint::Min(3)])
+        .split(upper_layout[0]);
 
-    let status_style = if app.file_is_valid {
-        Style::default()
-            .fg(Color::Green)
-            .add_modifier(Modifier::BOLD)
+    let (metadata_text, metadata_title, metadata_border_color) = if app.active_tab == 2 {
+        let status_style = if app.noctalia_config.is_some() && app.noctalia_is_valid {
+            Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
+        };
+
+        let status_text = if !app.noctalia_path.exists() {
+            Translations::get(&app.lang).noctalia_not_found
+        } else if app.noctalia_is_valid {
+            Translations::get(&app.lang).valid
+        } else {
+            Translations::get(&app.lang).noctalia_invalid
+        };
+
+        (
+            vec![
+                Line::from(vec![
+                    Span::styled(
+                        Translations::get(&app.lang).path,
+                        Style::default().fg(color_text_sec),
+                    ),
+                    Span::styled(
+                        get_display_path(&app.noctalia_path),
+                        Style::default().fg(color_text_main),
+                    ),
+                ]),
+                Line::from(vec![
+                    Span::styled(
+                        Translations::get(&app.lang).syntax,
+                        Style::default().fg(color_text_sec),
+                    ),
+                    Span::styled(status_text, status_style),
+                ]),
+            ],
+            Translations::get(&app.lang).noctalia_entorno_title,
+            color_border,
+        )
     } else {
-        Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
-    };
+        let status_style = if app.file_is_valid {
+            Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
+        };
 
-    let status_text = if app.file_is_valid {
-        Translations::get(&app.lang).valid
-    } else {
-        Translations::get(&app.lang).invalid
-    };
+        let status_text = if app.file_is_valid {
+            Translations::get(&app.lang).valid
+        } else {
+            Translations::get(&app.lang).invalid
+        };
 
-    let metadata_text = vec![
-        Line::from(vec![
-            Span::styled(
-                Translations::get(&app.lang).path,
-                Style::default().fg(Color::DarkGray),
-            ),
-            Span::styled(
-                app.config_path.to_string_lossy(),
-                Style::default().fg(Color::Cyan),
-            ),
-        ]),
-        Line::from(vec![
-            Span::styled(
-                Translations::get(&app.lang).size,
-                Style::default().fg(Color::DarkGray),
-            ),
-            Span::styled(
-                format!("{:.2} KB", app.file_size_kb),
-                Style::default().fg(Color::Yellow),
-            ),
-        ]),
-        Line::from(vec![
-            Span::styled(
-                Translations::get(&app.lang).modif,
-                Style::default().fg(Color::DarkGray),
-            ),
-            Span::styled(&app.file_mod_time, Style::default().fg(Color::Blue)),
-        ]),
-        Line::from(vec![
-            Span::styled(
-                Translations::get(&app.lang).syntax,
-                Style::default().fg(Color::DarkGray),
-            ),
-            Span::styled(status_text, status_style),
-        ]),
-    ];
+        (
+            vec![
+                Line::from(vec![
+                    Span::styled(
+                        Translations::get(&app.lang).path,
+                        Style::default().fg(color_text_sec),
+                    ),
+                    Span::styled(
+                        get_display_path(&app.config_path),
+                        Style::default().fg(color_text_main),
+                    ),
+                ]),
+                Line::from(vec![
+                    Span::styled(
+                        Translations::get(&app.lang).size,
+                        Style::default().fg(color_text_sec),
+                    ),
+                    Span::styled(
+                        format!("{:.2} KB", app.file_size_kb),
+                        Style::default().fg(accent_yellow),
+                    ),
+                ]),
+                Line::from(vec![
+                    Span::styled(
+                        Translations::get(&app.lang).modif,
+                        Style::default().fg(color_text_sec),
+                    ),
+                    Span::styled(&app.file_mod_time, Style::default().fg(color_text_main)),
+                ]),
+                Line::from(vec![
+                    Span::styled(
+                        Translations::get(&app.lang).syntax,
+                        Style::default().fg(color_text_sec),
+                    ),
+                    Span::styled(status_text, status_style),
+                ]),
+            ],
+            Translations::get(&app.lang).entorno_title,
+            color_border,
+        )
+    };
 
     let metadata_card = Paragraph::new(metadata_text).block(
         Block::bordered()
-            .title(Translations::get(&app.lang).entorno_title)
-            .border_style(Style::default().fg(Color::Cyan)),
+            .title(Span::styled(metadata_title, Style::default().fg(color_text_main)))
+            .border_style(Style::default().fg(metadata_border_color))
+            .bg(bg_sidebar),
     );
-    frame.render_widget(metadata_card, left_chunks[0]);
+    frame.render_widget(metadata_card, left_upper_chunks[0]);
 
-    let info_text = vec![
-        Line::from(Translations::get(&app.lang).info_line1),
-        Line::from(Translations::get(&app.lang).info_line2),
-        Line::from(Translations::get(&app.lang).info_line3),
-        Line::from(Translations::get(&app.lang).info_line4),
-    ];
-    let info_card = Paragraph::new(info_text).block(
-        Block::bordered()
-            .title(Translations::get(&app.lang).info_title)
-            .border_style(Style::default().fg(Color::DarkGray)),
-    );
-    frame.render_widget(info_card, left_chunks[1]);
+    // --- LIVE FILE PREVIEW ---
+    let preview_raw = app.get_live_file_preview();
+    let preview_lines: Vec<Line> = preview_raw
+        .lines()
+        .enumerate()
+        .map(|(i, line)| {
+            Line::from(vec![
+                Span::styled(format!("{:3} │ ", i + 1), Style::default().fg(color_text_sec)),
+                Span::styled(line, Style::default().fg(color_text_main)),
+            ])
+        })
+        .collect();
+
+    let preview_height = main_vertical_chunks[1].height as usize;
+    let max_scroll = if preview_lines.len() > preview_height.saturating_sub(2) {
+        (preview_lines.len() - (preview_height.saturating_sub(2))) as u16
+    } else {
+        0
+    };
+    if app.preview_scroll > max_scroll {
+        app.preview_scroll = max_scroll;
+    }
+
+    let preview_card = Paragraph::new(preview_lines)
+        .scroll((app.preview_scroll, 0))
+        .block(
+            Block::bordered()
+                .title(Span::styled(
+                    match app.lang {
+                        Language::Es => " Previsualización en Vivo [ [ / ] ] ",
+                        Language::En => " Live Preview [ [ / ] ] ",
+                    },
+                    Style::default().fg(color_text_main),
+                ))
+                .border_style(Style::default().fg(color_border))
+                .bg(bg_main),
+        );
+    frame.render_widget(preview_card, main_vertical_chunks[1]);
+
+    // --- AGENT ACTIVITY LOGS ---
+    let log_lines: Vec<Line> = app
+        .agent_logs
+        .iter()
+        .map(|log| {
+            let parts: Vec<&str> = log.splitn(2, ']').collect();
+            if parts.len() == 2 {
+                Line::from(vec![
+                    Span::styled(format!("{}]", parts[0]), Style::default().fg(color_text_sec)),
+                    Span::styled(parts[1].to_string(), Style::default().fg(accent_yellow)),
+                ])
+            } else {
+                Line::from(vec![Span::raw(log)])
+            }
+        })
+        .collect();
+
+    let logs_height = left_upper_chunks[1].height as usize;
+    let log_scroll = if log_lines.len() > logs_height.saturating_sub(2) {
+        (log_lines.len() - (logs_height.saturating_sub(2))) as u16
+    } else {
+        0
+    };
+
+    let logs_card = Paragraph::new(log_lines)
+        .scroll((log_scroll, 0))
+        .block(
+            Block::bordered()
+                .title(Span::styled(
+                    match app.lang {
+                        Language::Es => " Bitácora del Agente ",
+                        Language::En => " Agent Activity Log ",
+                    },
+                    Style::default().fg(color_text_main),
+                ))
+                .border_style(Style::default().fg(color_border))
+                .bg(bg_sidebar),
+        );
+    frame.render_widget(logs_card, left_upper_chunks[1]);
 
     if app.active_tab == 0 {
         let list_items: Vec<ListItem> = app
@@ -255,11 +400,11 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
                     Span::styled(
                         format!("  {:width$} ", key, width = 20),
                         Style::default()
-                            .fg(Color::Green)
+                            .fg(accent_yellow)
                             .add_modifier(Modifier::BOLD),
                     ),
-                    Span::styled("   ", Style::default().fg(Color::DarkGray)),
-                    Span::styled(action.clone(), Style::default().fg(Color::White)),
+                    Span::styled("   ", Style::default().fg(color_text_sec)),
+                    Span::styled(action.clone(), Style::default().fg(color_text_main)),
                 ])])
             })
             .collect();
@@ -267,22 +412,27 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
         let list_widget = List::new(list_items)
             .block(
                 Block::bordered()
-                    .title(format!(
-                        " {} ({}) ",
-                        Translations::get(&app.lang).list_title,
-                        app.keybindings.len()
+                    .title(Span::styled(
+                        format!(
+                            " {} ({}) ",
+                            Translations::get(&app.lang).list_title,
+                            app.keybindings.len()
+                        ),
+                        Style::default().fg(color_text_main),
                     ))
-                    .border_style(Style::default().fg(Color::Cyan)),
+                    .border_style(Style::default().fg(color_border))
+                    .bg(bg_main),
             )
             .highlight_style(
                 Style::default()
-                    .bg(Color::Rgb(40, 44, 52))
+                    .bg(bg_sidebar)
+                    .fg(accent_yellow)
                     .add_modifier(Modifier::BOLD),
             )
             .highlight_symbol("  ");
 
-        frame.render_stateful_widget(list_widget, main_layout[1], &mut app.list_state);
-    } else {
+        frame.render_stateful_widget(list_widget, upper_layout[1], &mut app.list_state);
+    } else if app.active_tab == 1 {
         let settings = app.get_appearance_settings();
         let list_items: Vec<ListItem> = settings
             .iter()
@@ -291,11 +441,11 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
                     Span::styled(
                         format!("  {:width$} ", setting.name, width = 35),
                         Style::default()
-                            .fg(Color::Yellow)
+                            .fg(color_text_sec)
                             .add_modifier(Modifier::BOLD),
                     ),
-                    Span::styled("   ", Style::default().fg(Color::DarkGray)),
-                    Span::styled(setting.value.clone(), Style::default().fg(Color::White)),
+                    Span::styled("   ", Style::default().fg(color_text_sec)),
+                    Span::styled(setting.value.clone(), Style::default().fg(accent_yellow)),
                 ])])
             })
             .collect();
@@ -303,17 +453,53 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
         let list_widget = List::new(list_items)
             .block(
                 Block::bordered()
-                    .title(" Configuración Estética ")
-                    .border_style(Style::default().fg(Color::Yellow)),
+                    .title(Span::styled(" Configuración Estética ", Style::default().fg(color_text_main)))
+                    .border_style(Style::default().fg(color_border))
+                    .bg(bg_main),
             )
             .highlight_style(
                 Style::default()
-                    .bg(Color::Rgb(40, 44, 52))
+                    .bg(bg_sidebar)
+                    .fg(accent_yellow)
                     .add_modifier(Modifier::BOLD),
             )
             .highlight_symbol("  ");
 
-        frame.render_stateful_widget(list_widget, main_layout[1], &mut app.appearance_state);
+        frame.render_stateful_widget(list_widget, upper_layout[1], &mut app.appearance_state);
+    } else {
+        let list_items: Vec<ListItem> = app
+            .noctalia_settings
+            .iter()
+            .map(|setting| {
+                ListItem::new(vec![Line::from(vec![
+                    Span::styled(
+                        format!("  {:width$} ", setting.name, width = 45),
+                        Style::default()
+                            .fg(color_text_sec)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled("   ", Style::default().fg(color_text_sec)),
+                    Span::styled(setting.value.clone(), Style::default().fg(accent_yellow)),
+                ])])
+            })
+            .collect();
+
+        let list_widget = List::new(list_items)
+            .block(
+                Block::bordered()
+                    .title(Span::styled(" Ajustes de Noctalia UI ", Style::default().fg(color_text_main)))
+                    .border_style(Style::default().fg(color_border))
+                    .bg(bg_main),
+            )
+            .highlight_style(
+                Style::default()
+                    .bg(bg_sidebar)
+                    .fg(accent_yellow)
+                    .add_modifier(Modifier::BOLD),
+            )
+            .highlight_symbol("  ");
+
+        frame.render_stateful_widget(list_widget, upper_layout[1], &mut app.noctalia_state);
     }
 
     match &app.active_screen {
@@ -366,8 +552,9 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
             ];
 
             let popup_block = Block::bordered()
-                .title(Translations::get(&app.lang).modal_install_title)
-                .border_style(Style::default().fg(Color::Yellow));
+                .title(Span::styled(Translations::get(&app.lang).modal_install_title, Style::default().fg(color_text_main)))
+                .border_style(Style::default().fg(color_border))
+                .bg(bg_sidebar);
 
             let prompt_paragraph = Paragraph::new(prompt_text)
                 .block(popup_block)
@@ -380,9 +567,9 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
 
             let prompt_text = vec![
                 Line::from(""),
-                Line::from(Translations::get(&app.lang).modal_create_msg1),
+                Line::from(Translations::get(&app.lang).modal_create_msg1).style(Style::default().fg(color_text_main)),
                 Line::from(""),
-                Line::from(Translations::get(&app.lang).modal_create_msg2),
+                Line::from(Translations::get(&app.lang).modal_create_msg2).style(Style::default().fg(color_text_sec)),
                 Line::from(""),
                 Line::from(vec![
                     Span::styled(
@@ -399,8 +586,9 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
             ];
 
             let popup_block = Block::bordered()
-                .title(Translations::get(&app.lang).modal_create_title)
-                .border_style(Style::default().fg(Color::Yellow));
+                .title(Span::styled(Translations::get(&app.lang).modal_create_title, Style::default().fg(color_text_main)))
+                .border_style(Style::default().fg(color_border))
+                .bg(bg_sidebar);
             let prompt_paragraph = Paragraph::new(prompt_text)
                 .block(popup_block)
                 .alignment(ratatui::layout::Alignment::Center);
@@ -420,12 +608,12 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
                 .split(popup_area);
 
             let key_style = if app.input_focus == InputFocus::Key {
-                Style::default().fg(Color::Cyan)
+                Style::default().fg(accent_yellow).add_modifier(Modifier::BOLD)
             } else {
-                Style::default().fg(Color::DarkGray)
+                Style::default().fg(color_border)
             };
             let key_block = Block::bordered()
-                .title(Translations::get(&app.lang).modal_add_key_title)
+                .title(Span::styled(Translations::get(&app.lang).modal_add_key_title, Style::default().fg(color_text_main)))
                 .border_style(key_style);
 
             let key_cursor = if app.input_focus == InputFocus::Key {
@@ -438,12 +626,12 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
             frame.render_widget(key_widget, popup_layout[0]);
 
             let action_style = if app.input_focus == InputFocus::Action {
-                Style::default().fg(Color::Cyan)
+                Style::default().fg(accent_yellow).add_modifier(Modifier::BOLD)
             } else {
-                Style::default().fg(Color::DarkGray)
+                Style::default().fg(color_border)
             };
             let action_block = Block::bordered()
-                .title(Translations::get(&app.lang).modal_add_action_title)
+                .title(Span::styled(Translations::get(&app.lang).modal_add_action_title, Style::default().fg(color_text_main)))
                 .border_style(action_style);
 
             let action_cursor = if app.input_focus == InputFocus::Action {
@@ -457,12 +645,13 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
 
             let modal_guide = Paragraph::new(Translations::get(&app.lang).modal_add_guide)
                 .alignment(ratatui::layout::Alignment::Center)
-                .style(Style::default().fg(Color::DarkGray));
+                .style(Style::default().fg(color_text_sec));
             frame.render_widget(modal_guide, popup_layout[2]);
 
             let outer_block = Block::bordered()
-                .title(Translations::get(&app.lang).modal_add_outer_title)
-                .border_style(Style::default().fg(Color::Magenta));
+                .title(Span::styled(Translations::get(&app.lang).modal_add_outer_title, Style::default().fg(color_text_main)))
+                .border_style(Style::default().fg(color_border))
+                .bg(bg_sidebar);
             frame.render_widget(outer_block, popup_area);
         }
         ActiveScreen::ConfirmOverwrite { key: k, .. } => {
@@ -475,9 +664,9 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
                     Translations::get(&app.lang)
                         .modal_confirm_msg1
                         .replace("{}", &k),
-                ),
+                ).style(Style::default().fg(color_text_main)),
                 Line::from(""),
-                Line::from(Translations::get(&app.lang).modal_confirm_msg2),
+                Line::from(Translations::get(&app.lang).modal_confirm_msg2).style(Style::default().fg(color_text_sec)),
                 Line::from(""),
                 Line::from(vec![
                     Span::styled(
@@ -494,8 +683,9 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
             ];
 
             let popup_block = Block::bordered()
-                .title(Translations::get(&app.lang).modal_confirm_title)
-                .border_style(Style::default().fg(Color::Yellow));
+                .title(Span::styled(Translations::get(&app.lang).modal_confirm_title, Style::default().fg(color_text_main)))
+                .border_style(Style::default().fg(color_border))
+                .bg(bg_sidebar);
             let prompt_paragraph = Paragraph::new(prompt_text)
                 .block(popup_block)
                 .alignment(ratatui::layout::Alignment::Center);
@@ -506,18 +696,19 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
             frame.render_widget(Clear, popup_area);
 
             let error_block = Block::bordered()
-                .title(Translations::get(&app.lang).modal_error_title)
-                .border_style(Style::default().fg(Color::Red));
+                .title(Span::styled(Translations::get(&app.lang).modal_error_title, Style::default().fg(Color::Red)))
+                .border_style(Style::default().fg(Color::Red))
+                .bg(bg_sidebar);
 
             let wrapped_text = vec![
                 Line::from(""),
-                Line::from(Translations::get(&app.lang).modal_error_msg.red()),
+                Line::from(Translations::get(&app.lang).modal_error_msg.red().bold()),
                 Line::from(""),
             ];
 
             let mut final_text = wrapped_text;
             for line in err_text.lines() {
-                final_text.push(Line::from(line.yellow().to_string()));
+                final_text.push(Line::from(line.to_string()).style(Style::default().fg(accent_yellow)));
             }
             final_text.push(Line::from(""));
             final_text.push(Line::from(
@@ -526,7 +717,7 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
                     .dim()
                     .white()
                     .to_string(),
-            ));
+            ).style(Style::default().fg(color_text_sec)));
 
             let error_paragraph = Paragraph::new(final_text)
                 .block(error_block)
@@ -539,12 +730,13 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
             frame.render_widget(Clear, popup_area);
 
             let popup_block = Block::bordered()
-                .title(Translations::get(&app.lang).modal_info_title)
-                .border_style(Style::default().fg(Color::Green));
+                .title(Span::styled(Translations::get(&app.lang).modal_info_title, Style::default().fg(color_text_main)))
+                .border_style(Style::default().fg(color_border))
+                .bg(bg_sidebar);
 
             let mut lines = vec![Line::from("")];
             for line in info_text.lines() {
-                lines.push(Line::from(line.white().to_string()));
+                lines.push(Line::from(line.to_string()).style(Style::default().fg(color_text_main)));
             }
             lines.push(Line::from(""));
             lines.push(Line::from(
@@ -553,7 +745,7 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
                     .dim()
                     .white()
                     .to_string(),
-            ));
+            ).style(Style::default().fg(color_text_sec)));
 
             let info_paragraph = Paragraph::new(lines)
                 .block(popup_block)
@@ -568,18 +760,22 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
             frame.render_widget(Clear, popup_area);
 
             let popup_block = Block::bordered()
-                .title(match app.lang {
-                    Language::Es => " 󰅩 Importar Atajos Recomendados ",
-                    Language::En => " 󰅩 Import Recommended Shortcuts ",
-                })
-                .border_style(Style::default().fg(Color::Yellow));
+                .title(Span::styled(
+                    match app.lang {
+                        Language::Es => " 󰅩 Importar Atajos Recomendados ",
+                        Language::En => " 󰅩 Import Recommended Shortcuts ",
+                    },
+                    Style::default().fg(color_text_main),
+                ))
+                .border_style(Style::default().fg(color_border))
+                .bg(bg_sidebar);
 
             let mut lines = vec![
                 Line::from(""),
                 Line::from(match app.lang {
                     Language::Es => "Se encontraron los siguientes atajos en la plantilla oficial que no tienes configurados.",
                     Language::En => "The following shortcuts from the official template are not configured in your file.",
-                }).dim(),
+                }).style(Style::default().fg(color_text_sec)),
                 Line::from(""),
             ];
 
@@ -591,25 +787,25 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
                     format!("{:<20}", key),
                     if is_selected {
                         Style::default()
-                            .fg(Color::Yellow)
+                            .fg(accent_yellow)
                             .add_modifier(Modifier::BOLD)
                     } else {
-                        Style::default().fg(Color::Cyan)
+                        Style::default().fg(color_text_main)
                     },
                 );
                 let action_span = Span::styled(
                     action,
                     if is_selected {
                         Style::default()
-                            .fg(Color::White)
+                            .fg(accent_yellow)
                             .add_modifier(Modifier::BOLD)
                     } else {
-                        Style::default().fg(Color::DarkGray)
+                        Style::default().fg(color_text_sec)
                     },
                 );
 
                 let style = if is_selected {
-                    Style::default().bg(Color::Rgb(40, 44, 52))
+                    Style::default().bg(bg_main)
                 } else {
                     Style::default()
                 };
@@ -620,7 +816,7 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
                             prefix,
                             if is_selected {
                                 Style::default()
-                                    .fg(Color::Yellow)
+                                    .fg(accent_yellow)
                                     .add_modifier(Modifier::BOLD)
                             } else {
                                 Style::default()
@@ -638,7 +834,7 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
             lines.push(Line::from(match app.lang {
                 Language::Es => " [Enter/i] Importar seleccionado   [y] Importar TODOS de un porrazo   [Esc] Cancelar ",
                 Language::En => " [Enter/i] Import selected   [y] Import ALL at once   [Esc] Cancel ",
-            }).bold().cyan());
+            }).bold().fg(accent_yellow));
 
             let paragraph = Paragraph::new(lines)
                 .block(popup_block)
@@ -654,8 +850,9 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
             frame.render_widget(Clear, popup_area);
 
             let popup_block = Block::bordered()
-                .title(Translations::get(&app.lang).modal_appearance_title)
-                .border_style(Style::default().fg(Color::Yellow));
+                .title(Span::styled(Translations::get(&app.lang).modal_appearance_title, Style::default().fg(color_text_main)))
+                .border_style(Style::default().fg(color_border))
+                .bg(bg_sidebar);
 
             let prompt_text = vec![
                 Line::from(""),
@@ -663,19 +860,59 @@ pub fn ui_draw(frame: &mut Frame, app: &mut App) {
                     Translations::get(&app.lang)
                         .modal_appearance_msg
                         .replace("{}", setting_name),
-                ),
+                ).style(Style::default().fg(color_text_main)),
                 Line::from(""),
                 Line::from(vec![
                     Span::styled("   ", Style::default()),
                     Span::styled(
                         format!("{}_", input_value),
                         Style::default()
-                            .fg(Color::Cyan)
+                            .fg(accent_yellow)
                             .add_modifier(Modifier::BOLD),
                     ),
                 ]),
                 Line::from(""),
-                Line::from(Translations::get(&app.lang).modal_appearance_guide).dim(),
+                Line::from(Translations::get(&app.lang).modal_appearance_guide).style(Style::default().fg(color_text_sec)),
+            ];
+
+            let prompt_paragraph = Paragraph::new(prompt_text)
+                .block(popup_block)
+                .alignment(ratatui::layout::Alignment::Center);
+            frame.render_widget(prompt_paragraph, popup_area);
+        }
+        ActiveScreen::EditNoctaliaPopup {
+            setting_id: _,
+            setting_name,
+            input_value,
+            value_type: _,
+        } => {
+            let popup_area = get_centered_rect(60, 25, size);
+            frame.render_widget(Clear, popup_area);
+
+            let popup_block = Block::bordered()
+                .title(Span::styled(Translations::get(&app.lang).modal_noctalia_title, Style::default().fg(color_text_main)))
+                .border_style(Style::default().fg(color_border))
+                .bg(bg_sidebar);
+
+            let prompt_text = vec![
+                Line::from(""),
+                Line::from(
+                    Translations::get(&app.lang)
+                        .modal_noctalia_msg
+                        .replace("{}", setting_name),
+                ).style(Style::default().fg(color_text_main)),
+                Line::from(""),
+                Line::from(vec![
+                    Span::styled("   ", Style::default()),
+                    Span::styled(
+                        format!("{}_", input_value),
+                        Style::default()
+                            .fg(accent_yellow)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                ]),
+                Line::from(""),
+                Line::from(Translations::get(&app.lang).modal_appearance_guide).style(Style::default().fg(color_text_sec)),
             ];
 
             let prompt_paragraph = Paragraph::new(prompt_text)
