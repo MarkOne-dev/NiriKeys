@@ -18,7 +18,7 @@ mod ui;
 
 use app::{ActiveScreen, App, get_default_keybindings};
 use cli::Args;
-use system::{detect_language, get_config_path, get_package_manager, command_exists};
+use system::{detect_language, get_config_path, get_package_manager, command_exists, normalize_key, normalize_action};
 use translations::{Language, Translations};
 use ui::ui_draw;
 
@@ -196,26 +196,31 @@ fn run_loop(
                                     app.delete_selected();
                                 }
                             }
+                            KeyCode::Char('l') | KeyCode::Char('L') => app.toggle_language(),
                             KeyCode::Char('b') => app.trigger_backup(),
                             KeyCode::Char('c') | KeyCode::Char('C') => {
                                 if app.active_tab == 0 {
                                     let defaults = get_default_keybindings();
                                     let mut missing = Vec::new();
                                     for (default_key, default_action) in defaults {
-                                        if let Some((_, user_action)) =
-                                            app.keybindings.iter().find(|(k, _)| k == &default_key)
-                                        {
-                                            if default_action.trim() != user_action.trim() {
-                                                missing.push((default_key, default_action));
+                                        let user_match = app.keybindings.iter().find(|(user_key, _)| {
+                                            normalize_key(user_key) == normalize_key(&default_key)
+                                        });
+                                        match user_match {
+                                            Some((_, user_action)) => {
+                                                if normalize_action(&default_action) != normalize_action(user_action) {
+                                                    missing.push((default_key, default_action, Some(user_action.clone())));
+                                                }
                                             }
-                                        } else {
-                                            missing.push((default_key, default_action));
+                                            None => {
+                                                missing.push((default_key, default_action, None));
+                                            }
                                         }
                                     }
                                     if missing.is_empty() {
                                         app.active_screen = ActiveScreen::InfoPopup(match app.lang {
-                                            Language::Es => "No se encontraron atajos faltantes en la plantilla oficial.".to_string(),
-                                            Language::En => "No missing shortcuts from the official template were found.".to_string(),
+                                            Language::Es => "No se encontraron discrepancias con la plantilla oficial.".to_string(),
+                                            Language::En => "No discrepancies with the official template were found.".to_string(),
                                         });
                                     } else {
                                         app.active_screen = ActiveScreen::MergePopup {
@@ -381,8 +386,8 @@ fn run_loop(
                             }
                             KeyCode::Enter | KeyCode::Char('i') | KeyCode::Char('I') => {
                                 let mut missing_clone = missing.clone();
-                                let selected = missing_clone.remove(*selected_idx);
-                                match app.apply_keybindings_batch(vec![selected]) {
+                                let (key, action, _) = missing_clone.remove(*selected_idx);
+                                match app.apply_keybindings_batch(vec![(key, action)]) {
                                     Ok(_) => {
                                         if missing_clone.is_empty() {
                                             app.active_screen = ActiveScreen::InfoPopup(match app
@@ -413,7 +418,10 @@ fn run_loop(
                                 }
                             }
                             KeyCode::Char('y') | KeyCode::Char('Y') => {
-                                let all_to_import = missing.clone();
+                                let all_to_import: Vec<(String, String)> = missing
+                                    .iter()
+                                    .map(|(k, a, _)| (k.clone(), a.clone()))
+                                    .collect();
                                 match app.apply_keybindings_batch(all_to_import) {
                                     Ok(_) => {
                                         app.active_screen = ActiveScreen::InfoPopup(match app.lang {
